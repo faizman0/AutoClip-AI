@@ -333,7 +333,7 @@ def test_download_api_says_started_and_background_failure_is_visible(monkeypatch
         assert response.status_code == 202
         body = response.json()
         assert body["status"] == "downloading" and body["model"] == "base"
-        assert "完成" not in body["message"]
+        assert "Done" not in body["message"]
         again = client.post("/whisper-models/download", json={"model": "base"})
         assert again.status_code == 202 and again.json()["status"] == "downloading"
         assert client.get("/whisper-models/base/status").json()["status"] == "downloading"

@@ -173,7 +173,7 @@ def test_manager_env_fallbacks_for_docker(manager_env, monkeypatch):
 
 
 class _ChatCapableClient(_FakeOpenAIClient):
-    """带 chat.completions.create 的假客户端，记录请求模型名"""
+    """带 chat.completions.create 的假客户端，记录Request model名"""
     last_model = None
 
     def __init__(self, **kwargs):

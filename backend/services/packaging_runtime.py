@@ -42,7 +42,7 @@ OFFICIAL_PIP_INDEX = "https://pypi.org/simple"
 CN_PIP_INDEX = "https://pypi.tuna.tsinghua.edu.cn/simple"
 PIP_INDEX_MODES = ("auto", "pypi", "mirror")
 PLAYWRIGHT_DOWNLOAD_MODES = ("auto", "official", "mirror")
-# 大陆到官方源的路由会黑洞。pip 自己的重试可以空转十几分钟且没有任何输出。
+# 大陆到官方源的Routes会黑洞。pip 自己的重试可以空转十几分钟且没有任何输出。
 # 官方源一旦静默就改走镜像；镜像侧留出真正下载的时间。
 PIP_OFFICIAL_STALL_SECONDS = 40
 PIP_OFFICIAL_TIMEOUT_SECONDS = 90

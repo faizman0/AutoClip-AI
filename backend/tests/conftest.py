@@ -12,7 +12,7 @@ from unittest.mock import Mock, MagicMock
 import sys
 import os
 
-# 添加项目根目录到Python路径
+# Add project root to Python path
 project_root = Path(__file__).parent.parent.parent
 sys.path.append(str(project_root))
 
