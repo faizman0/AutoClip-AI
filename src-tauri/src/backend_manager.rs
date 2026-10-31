@@ -13,7 +13,7 @@ pub struct BackendStatus {
     pub is_running: bool,
     pub port: u16,
     pub pid: Option<u32>,
-    pub start_time: Option<u64>, // 改为u64以支持序列化
+    pub start_time: Option<u64>, // Changed to u64 to support serialization
 }
 
 impl Default for BackendStatus {
@@ -56,7 +56,7 @@ impl BackendManager {
             return Err("后端服务已在运行".to_string());
         }
 
-        // 启动后端服务
+        // Start backend service
         let launch = self.get_backend_launch(&app_handle)?;
 
         let mut cmd = Command::new(&launch.program);

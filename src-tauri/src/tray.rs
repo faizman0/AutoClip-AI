@@ -8,7 +8,7 @@ struct TrayLabels([MenuItem<tauri::Wry>; 6]);
 
 fn labels(language: &str) -> [&'static str; 6] {
     match language {
-        "zh" => ["显示主窗口", "隐藏主窗口", "启动后端服务", "停止后端服务", "重启后端服务", "退出应用"],
+        "zh" => ["Show window", "Hide window", "Start service", "Stop service", "Restart service", "Quit"],
         "ja" => ["ウィンドウを表示", "ウィンドウを隠す", "サービスを開始", "サービスを停止", "サービスを再起動", "終了"],
         "ko" => ["창 표시", "창 숨기기", "서비스 시작", "서비스 중지", "서비스 다시 시작", "종료"],
         "es" => ["Mostrar ventana", "Ocultar ventana", "Iniciar servicio", "Detener servicio", "Reiniciar servicio", "Salir"],
@@ -29,7 +29,7 @@ pub fn set_tray_language(app: AppHandle, language: String) -> Result<(), String>
 }
 
 pub fn setup_system_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
-    // 创建菜单项
+    // Create menu items
     let show = MenuItem::with_id(app, "show", "Show window", true, None::<&str>)?;
     let hide = MenuItem::with_id(app, "hide", "Hide window", true, None::<&str>)?;
     let separator = MenuItem::with_id(app, "separator1", "", false, None::<&str>)?;
@@ -41,7 +41,7 @@ pub fn setup_system_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Erro
     let separator2 = MenuItem::with_id(app, "separator2", "", false, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
 
-    // 构建菜单
+    // Build menu
     let menu = MenuBuilder::new(app)
         .item(&show)
         .item(&hide)
@@ -55,7 +55,7 @@ pub fn setup_system_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Erro
 
     app.manage(TrayLabels([show, hide, start_backend, stop_backend, restart_backend, quit]));
 
-    // 创建托盘图标
+    // Create tray icon
     let _tray = TrayIconBuilder::with_id("main-tray")
         .icon(app.default_window_icon().unwrap().clone())
         .menu(&menu)
@@ -73,11 +73,11 @@ pub fn setup_system_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Erro
                     }
                 }
                 "start_backend" => {
-                    // 启动后端服务
+                    // Start backend service
                     let backend_manager = app.state::<crate::BackendManager>();
                     match backend_manager.start(app.app_handle().clone()) {
                         Ok(_) => {
-                            println!("后端服务启动成功");
+                            println!("Backend service started successfully");
                         }
                         Err(e) => {
                             eprintln!("后端服务启动失败: {}", e);

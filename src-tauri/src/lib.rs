@@ -40,7 +40,7 @@ pub fn run() {
         ])
         .manage(BackendManager::new())
         .setup(|app| {
-            // 设置环境变量
+            // Set environment variables
             std::env::set_var("AUTOCLIP_DESKTOP_MODE", "true");
             std::env::set_var("AUTOCLIP_MODE", "desktop");
 
