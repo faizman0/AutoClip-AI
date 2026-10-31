@@ -1,6 +1,6 @@
 """
-桌面模式Celery配置
-使用SQLite作为Broker和Backend，适合单机桌面应用
+Desktop mode Celery configuration
+Use SQLite as Broker and Backend, suitable for single-machine desktop apps
 """
 import os
 

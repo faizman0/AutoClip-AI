@@ -1,6 +1,6 @@
 """
-桌面模式主启动文件
-使用统一的 app_factory 创建应用，支持端口自动分配
+Desktop mode main startup file
+Use unified app_factory to create app, supports automatic port allocation
 """
 import os
 import sys
@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 from fastapi import FastAPI
 
-# 添加项目根目录到Python路径
+# Add project root to Python path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
@@ -75,7 +75,7 @@ class DesktopServiceManager:
         # 使用统一的 app_factory
         app = create_app(mode="desktop")
         
-        # 添加桌面专用路由
+        # 添加桌面专用Routes
         @app.get("/desktop/info")
         async def desktop_info():
             """桌面应用信息"""

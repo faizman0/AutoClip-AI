@@ -190,7 +190,7 @@ def timeline_failure_from_report(topic_count: int, report: dict) -> PipelineFail
                 rejected[reason] = rejected.get(reason, 0) + count
         invalid_ranges = rejected.get("invalid_time", 0) + rejected.get("outside_chunk_or_reversed", 0)
         detail = (f"其中 {invalid_ranges} 个候选的时间戳无效、倒序或不在当前字幕块内。" if invalid_ranges else "")
-        cache_hint = "本次回放了项目中的模型缓存，未重新请求模型；请重新导入素材创建新项目再试。" if any(
+        cache_hint = "本次回放了项目中的模型缓存，未重新Request model；请重新导入素材创建新项目再试。" if any(
             chunk.get("source") == "cache" for chunk in chunks
         ) else "请换用能稳定返回结构化时间线的模型后重试；本地模型需支持当前字幕长度。"
         return PipelineFailure(

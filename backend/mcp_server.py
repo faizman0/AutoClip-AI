@@ -159,7 +159,7 @@ def _run_job(req: RunRequest, override: LLMOverride, link: bool) -> Dict[str, An
                 _job_update(req.project_id, status="failed", error_code="failed", error=result.get("error") or "处理失败")
                 return _jobs[req.project_id]
             summary = summarize_project(req.project_id)
-            _job_update(req.project_id, status="completed", percent=100, stage="DONE", message="完成",
+            _job_update(req.project_id, status="completed", percent=100, stage="DONE", message="Done",
                         error_code="none", result=summary)
             return _jobs[req.project_id]
         except Exception as e:  # noqa: BLE001

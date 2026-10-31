@@ -1,5 +1,5 @@
 """
-数据模型包
+Data model包
 包含所有数据库模型定义
 """
 from .base import Base, TimestampMixin
