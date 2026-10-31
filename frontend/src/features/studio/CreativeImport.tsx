@@ -20,24 +20,24 @@ import './studio.css'
 import './quick-output.css'
 
 function issueCopy(item: ReadinessIssue) {
-  if (item.key === 'analysis') return t('分析模型还没配好。连接一家 AI 服务后再生成。')
-  if (item.code === 'whisper_installing') return t('正在安装本地转写…')
-  if (item.code === 'whisper_not_installed') return t('本地转写还没安装。已有字幕可以直接继续。')
-  if (item.code === 'whisper_model_missing') return t('转写模型还没下载。已有字幕可以直接继续。')
-  if (item.code === 'whisper_model_downloading') return t('正在下载转写模型…')
-  if (item.code === 'whisper_model_failed') return t('转写模型下载失败，请重试。已有字幕可以直接继续。')
-  if (item.code === 'sensevoice_not_ready') return t('SenseVoice 还没准备好。已有字幕可以直接继续。')
-  if (item.code === 'cloud_not_configured') return t('云端转写还没配好。已有字幕可以直接继续。')
-  if (item.key === 'visual') return t('画面分析需要可用的视觉模型。')
-  if (item.key === 'ffmpeg') return t('找不到 FFmpeg，暂时无法处理视频。')
-  return t('导入条件还没准备好。')
+  if (item.key === 'analysis') return t('The analysis model is not set up yet. Connect an AI service before generating.')
+  if (item.code === 'whisper_installing') return t('Installing local transcription…')
+  if (item.code === 'whisper_not_installed') return t('Local transcription is not installed yet. If you already have subtitles, you can continue directly.')
+  if (item.code === 'whisper_model_missing') return t('The transcription model has not been downloaded yet. If you already have subtitles, you can continue directly.')
+  if (item.code === 'whisper_model_downloading') return t('Downloading the transcription model…')
+  if (item.code === 'whisper_model_failed') return t('The transcription model download failed. Please retry. If you already have subtitles, you can continue directly.')
+  if (item.code === 'sensevoice_not_ready') return t('SenseVoice is not ready yet. If you already have subtitles, you can continue directly.')
+  if (item.code === 'cloud_not_configured') return t('Cloud transcription is not configured yet. If you already have subtitles, you can continue directly.')
+  if (item.key === 'visual') return t('Visual analysis requires an available vision model.')
+  if (item.key === 'ffmpeg') return t('FFmpeg not found; unable to process the video for now.')
+  return t('Import conditions are not ready yet.')
 }
 
 function repairLabel(item: ReadinessIssue) {
-  if (item.repair === 'settings_ai') return t('连接 AI 服务')
-  if (item.repair === 'install_whisper') return item.model ? t('下载转写模型') : t('安装 Whisper')
-  if (item.repair === 'settings_transcription') return t('转写设置')
-  if (item.repair === 'settings_vision') return t('视觉设置')
+  if (item.repair === 'settings_ai') return t('Connect AI service')
+  if (item.repair === 'install_whisper') return item.model ? t('Download transcription model') : t('Install Whisper')
+  if (item.repair === 'settings_transcription') return t('Transcription settings')
+  if (item.repair === 'settings_vision') return t('Vision settings')
   return ''
 }
 
@@ -115,15 +115,15 @@ export default function CreativeImport({ onImported, blocked = false, onBlocked 
     if (destination) navigate(destination)
   }
   const submit = async () => {
-    if (blocked) { trackExperience('import_blocked', { reason: 'setup_required', placement: 'home_setup' }); setError(t("请先连接 AI 服务，再导入视频。")); onBlocked?.(); return }
-    if (source === 'file' ? !file : !url.trim()) { setError(t("请先添加视频文件或链接")); return }
+    if (blocked) { trackExperience('import_blocked', { reason: 'setup_required', placement: 'home_setup' }); setError(t("Please connect an AI service before importing a video.")); onBlocked?.(); return }
+    if (source === 'file' ? !file : !url.trim()) { setError(t("Please add a video file or link first")); return }
     const reason = submissionBlock(readiness, !!subtitle, settled)
-    if (reason === 'pending') { setError(t('正在确认导入条件…')); return }
+    if (reason === 'pending') { setError(t('Confirming import conditions…')); return }
     trackAsrReadiness(asrReadinessProperties(readiness, !!subtitle))
-    if (reason === 'analysis') { setError(t('请先连接 AI 服务，再导入视频。')); return }
-    if (reason === 'transcription') { setError(t('还没有可用的转写。可以附上 SRT 字幕，或先准备好转写。')); return }
-    if (reason === 'visual') { setError(t('请先配好画面分析模型，再生成成片。')); return }
-    if (reason === 'ffmpeg') { setError(t('找不到 FFmpeg，无法生成成片。')); return }
+    if (reason === 'analysis') { setError(t('Please connect an AI service before importing a video.')); return }
+    if (reason === 'transcription') { setError(t('No usable transcription is available yet. You can attach an SRT subtitle file, or prepare transcription first.')); return }
+    if (reason === 'visual') { setError(t('Please configure a visual analysis model before generating the final video.')); return }
+    if (reason === 'ffmpeg') { setError(t('FFmpeg not found; unable to generate the final video.')); return }
     setBusy(true); setError('')
     try {
       const body = new FormData()
@@ -141,7 +141,7 @@ export default function CreativeImport({ onImported, blocked = false, onBlocked 
       if (options.aspect) body.append('aspect', options.aspect)
       if (options.duration) body.append('duration', String(options.duration))
       if (subtitle) body.append('subtitle', subtitle)
-      body.append('name', file && source === 'file' ? file.name.replace(/\.[^.]+$/, '') : t("智能剪辑"))
+      body.append('name', file && source === 'file' ? file.name.replace(/\.[^.]+$/, '') : t("Smart edit"))
       if (source === 'file' && file) body.append('video', file)
       else { body.append('url', url.trim()); if (browser) body.append('browser', browser) }
       const result = await studioApi.import(body)
@@ -152,30 +152,30 @@ export default function CreativeImport({ onImported, blocked = false, onBlocked 
     } catch (e) { setError(t(errorText(e))) } finally { setBusy(false) }
   }
   return <section className="ac-creative-import">
-    <h1 className="ac-title">{t("放入视频，直接生成可发布成片。")}</h1>
-    <p className="studio-muted">{t("选择发布平台，AI 会自动挑选内容、完成剪辑与渲染。生成后可直接下载或继续编辑。")}</p>
+    <h1 className="ac-title">{t("Drop in a video and generate a publish-ready final cut directly.")}</h1>
+    <p className="studio-muted">{t("Choose the publishing platforms; AI will automatically select content, complete the editing and rendering. Once generated, you can download it directly or continue editing.")}</p>
     <div className="studio-import-box">
-      <div className="studio-row"><Segmented ariaLabel={t("导入来源")} value={source} onChange={v=>!busy&&setSource(v)} options={[{value:'link',label:t("链接导入")},{value:'file',label:t("文件导入")}]}/></div>
-      {source==='link'?<label className="studio-field"><span className="studio-sr">{t("视频链接")}</span><textarea placeholder={t("粘贴 B 站或 YouTube 视频链接")} value={url} onChange={e=>setUrl(e.target.value)} disabled={busy}/></label>:<label className="studio-file"><span>{file?.name || t("选择一段视频")}</span><input type="file" aria-label={t("视频文件")} accept="video/mp4,video/webm,video/quicktime,.mkv,.avi" disabled={busy} onChange={e=>setFile(e.target.files?.[0] || null)}/><small>MP4 / MOV / MKV / WEBM / AVI</small></label>}
+      <div className="studio-row"><Segmented ariaLabel={t("Import source")} value={source} onChange={v=>!busy&&setSource(v)} options={[{value:'link',label:t("Import by link")},{value:'file',label:t("Import by file")}]}/></div>
+      {source==='link'?<label className="studio-field"><span className="studio-sr">{t("Video link")}</span><textarea placeholder={t("Paste a Bilibili or YouTube video link")} value={url} onChange={e=>setUrl(e.target.value)} disabled={busy}/></label>:<label className="studio-file"><span>{file?.name || t("Select a video")}</span><input type="file" aria-label={t("Video file")} accept="video/mp4,video/webm,video/quicktime,.mkv,.avi" disabled={busy} onChange={e=>setFile(e.target.files?.[0] || null)}/><small>MP4 / MOV / MKV / WEBM / AVI</small></label>}
       {templatesOn && visualOn && platforms.some(platform => !['bilibili', 'youtube_long', 'original'].includes(platform)) && <StyleProbeLine sourceKey={source === 'file' ? (file ? `file:${file.name}:${file.size}:${file.lastModified}` : null) : (url.trim() ? `url:${url.trim()}` : null)} />}
       <PlatformPicker value={platforms} onChange={setPlatforms} disabled={busy}/>
       {templatesOn && platforms.some(platform => !['bilibili', 'youtube_long', 'original'].includes(platform)) && <TemplatePicker visual={visualOn} disabled={busy} value={options.html_template} sourceKey={source === 'file' ? (file ? `file:${file.name}:${file.size}:${file.lastModified}` : null) : (url.trim() ? `url:${url.trim()}` : null)} url={url} file={file} sourceKind={source === 'file' ? (file ? 'file' : 'none') : (url.trim() ? 'link' : 'none')} onChange={(html_template: HtmlTemplateChoice) => setOptions({...options, html_template})}/>}
-      {!templatesOn && platforms.some(platform => !['bilibili', 'youtube_long', 'original'].includes(platform)) && <div className="studio-field"><span>{t('竖版版式')}</span><Select aria-label={t('竖版版式')} disabled={busy} value={options.portrait_style || 'auto'} options={[{value:'auto',label:t('按平台默认')},{value:'interview',label:t('访谈式（人物窗口）')},{value:'podcast',label:t('播客式（满屏）')}]} onChange={portrait_style=>setOptions({...options,portrait_style})}/><small>{t('仅调整竖版布局，字幕与发布文案语言仍按平台。')}</small></div>}
-      {templatesOn && options.html_template === 'classic' && platforms.some(platform => !['bilibili', 'youtube_long', 'original'].includes(platform)) && <div className="studio-field"><span>{t('竖版版式')}</span><Select aria-label={t('竖版版式')} disabled={busy} value={options.portrait_style || 'auto'} options={[{value:'auto',label:t('按平台默认')},{value:'interview',label:t('访谈式（人物窗口）')},{value:'podcast',label:t('播客式（满屏）')}]} onChange={portrait_style=>setOptions({...options,portrait_style})}/><small>{t('仅调整竖版布局，字幕与发布文案语言仍按平台。')}</small></div>}
-      <details className="studio-details"><summary>{t("有特别要求？（选填）")}</summary><label className="studio-field"><span className="studio-sr">{t("制作要求")}</span><input aria-label={t("制作要求")} placeholder={t("例如：保留完整观点或挑战过程")} maxLength={1000} value={options.instruction} disabled={busy} onChange={e=>setOptions({...options,instruction:e.target.value})}/></label></details>
+      {!templatesOn && platforms.some(platform => !['bilibili', 'youtube_long', 'original'].includes(platform)) && <div className="studio-field"><span>{t('Vertical layout')}</span><Select aria-label={t('Vertical layout')} disabled={busy} value={options.portrait_style || 'auto'} options={[{value:'auto',label:t('Platform default')},{value:'interview',label:t('Interview style (person window)')},{value:'podcast',label:t('Podcast style (full screen)')}]} onChange={portrait_style=>setOptions({...options,portrait_style})}/><small>{t('Only adjusts the vertical layout; subtitle and publish copy languages still follow the platform.')}</small></div>}
+      {templatesOn && options.html_template === 'classic' && platforms.some(platform => !['bilibili', 'youtube_long', 'original'].includes(platform)) && <div className="studio-field"><span>{t('Vertical layout')}</span><Select aria-label={t('Vertical layout')} disabled={busy} value={options.portrait_style || 'auto'} options={[{value:'auto',label:t('Platform default')},{value:'interview',label:t('Interview style (person window)')},{value:'podcast',label:t('Podcast style (full screen)')}]} onChange={portrait_style=>setOptions({...options,portrait_style})}/><small>{t('Only adjusts the vertical layout; subtitle and publish copy languages still follow the platform.')}</small></div>}
+      <details className="studio-details"><summary>{t("Any special requirements? (optional)")}</summary><label className="studio-field"><span className="studio-sr">{t("Production requirements")}</span><input aria-label={t("Production requirements")} placeholder={t("For example: keep the complete viewpoint or challenge process")} maxLength={1000} value={options.instruction} disabled={busy} onChange={e=>setOptions({...options,instruction:e.target.value})}/></label></details>
       {issues.length > 0 && <div className="studio-readiness" role="status">
         {issues.map(item => <div className="studio-readiness-row" key={item.key}>
           <StatusDot tone={item.code === 'whisper_installing' || item.code === 'whisper_model_downloading' ? 'accent' : 'muted'} label={issueCopy(item)} />
           {item.repair !== 'none' && <Btn size="sm" disabled={busy || repairing} loading={repairing && item.repair === 'install_whisper'} onClick={() => void repair(item)}>{repairLabel(item)}</Btn>}
         </div>)}
       </div>}
-      <div className="studio-row studio-import-bottom"><div><span className="studio-muted">{t('会按所选平台自动制作，数量由素材内容决定。')}</span><button className="studio-link studio-preferences-link" disabled={busy} onClick={()=>setPreferences(true)}>{t("高级偏好")}</button></div><Btn variant="cta" loading={busy} onClick={submit}>{busy?t("正在生成"):t("生成成片")}</Btn></div>
+      <div className="studio-row studio-import-bottom"><div><span className="studio-muted">{t('It will automatically produce for the selected platforms; the quantity is determined by the source content.')}</span><button className="studio-link studio-preferences-link" disabled={busy} onClick={()=>setPreferences(true)}>{t("Advanced preferences")}</button></div><Btn variant="cta" loading={busy} onClick={submit}>{busy?t("Generating"):t("Generate final video")}</Btn></div>
       {error&&<p className="studio-error" role="alert">{error}</p>}
     </div>
-    <Dialog open={preferences} onClose={()=>setPreferences(false)} title={t("制作偏好")} description={t("默认由 AI 匹配。你指定的选项优先，生成后也可以修改。")} footer={<div className="studio-actions"><Btn onClick={()=>{setOptions({...defaultImportOptions,instruction:options.instruction});setSubtitle(null);setBrowser('')}}>{t("恢复自动")}</Btn><Btn variant="cta" onClick={()=>setPreferences(false)}>{t("完成")}</Btn></div>}>
+    <Dialog open={preferences} onClose={()=>setPreferences(false)} title={t("Production preferences")} description={t("AI matches by default. Your specified options take priority, and you can modify them after generation.")} footer={<div className="studio-actions"><Btn onClick={()=>{setOptions({...defaultImportOptions,instruction:options.instruction});setSubtitle(null);setBrowser('')}}>{t("Restore automatic")}</Btn><Btn variant="cta" onClick={()=>setPreferences(false)}>{t("Done")}</Btn></div>}>
       <ImportPreferences value={options} onChange={setOptions}/>
-      <label className="studio-field">{t("已有字幕（选填）")}<input type="file" accept=".srt" aria-label={t("已有字幕")} onChange={e=>setSubtitle(e.target.files?.[0] || null)}/>{subtitle&&<small>{subtitle.name}<button className="studio-link" onClick={()=>setSubtitle(null)}>{t("移除")}</button></small>}</label>
-      {source==='link'&&<details className="studio-details"><summary>{t("下载遇到登录限制时")}</summary><label className="studio-field">{t("使用浏览器登录状态")}<select value={browser} onChange={e=>setBrowser(e.target.value)}><option value="">{t("不使用")}</option>{['chrome','edge','safari','firefox'].map(b=><option key={b}>{b}</option>)}</select></label><p className="studio-muted">{t("仅在下载需要登录时选择，不会自动读取浏览器 Cookie。")}</p></details>}
+      <label className="studio-field">{t("Existing subtitles (optional)")}<input type="file" accept=".srt" aria-label={t("Existing subtitles")} onChange={e=>setSubtitle(e.target.files?.[0] || null)}/>{subtitle&&<small>{subtitle.name}<button className="studio-link" onClick={()=>setSubtitle(null)}>{t("Remove")}</button></small>}</label>
+      {source==='link'&&<details className="studio-details"><summary>{t("When the download hits a login restriction")}</summary><label className="studio-field">{t("Use browser login state")}<select value={browser} onChange={e=>setBrowser(e.target.value)}><option value="">{t("Do not use")}</option>{['chrome','edge','safari','firefox'].map(b=><option key={b}>{b}</option>)}</select></label><p className="studio-muted">{t("Only choose this when the download requires login; browser cookies are not read automatically.")}</p></details>}
     </Dialog>
   </section>
 }
