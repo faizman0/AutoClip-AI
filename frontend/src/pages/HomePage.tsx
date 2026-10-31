@@ -78,7 +78,7 @@ const HomePage: React.FC = () => {
       const safeProjects = Array.isArray(projects) ? projects : []
       setProjects(safeProjects)
     } catch (error) {
-      message.error(t("加载项目失败"))
+      message.error(t("Failed to load projects"))
       console.error('Load projects error:', error)
       // 如果API调用失败，设置空数组
       setProjects([])
@@ -91,9 +91,9 @@ const HomePage: React.FC = () => {
     try {
       await projectApi.deleteProject(id)
       deleteProject(id)
-      message.success(t("项目删除成功"))
+      message.success(t("Project deleted successfully"))
     } catch (error) {
-      message.error(t("删除项目失败"))
+      message.error(t("Failed to delete project"))
       console.error('Delete project error:', error)
     }
   }
@@ -103,7 +103,7 @@ const HomePage: React.FC = () => {
   // 提示 + 刷新列表，绝不能再发一次重试请求（会和卡片自身的请求叠加，并制造
   // loadProjects→重挂载→自动启动 的循环）。
   const handleRetryProject = async () => {
-    message.success(t("已开始重试处理项目"))
+    message.success(t("Started retrying the processing of the item"))
     try {
       await loadProjects()
     } catch (error) {
@@ -122,7 +122,7 @@ const HomePage: React.FC = () => {
       navigate(`/project/${project_id}`)
     } catch (error) {
       finish('failed', {}, error)
-      message.error(t("示例项目暂时不可用"))
+      message.error(t("The sample project is currently unavailable."))
       console.error('Example project error:', error)
     } finally {
       setExampleBusy(false)
@@ -132,7 +132,7 @@ const HomePage: React.FC = () => {
   const handleProjectCardClick = (project: Project) => {
     // 导入中状态的项目不能点击进入详情页
     if (project.status === 'pending' && !project.settings?.smart_import && !project.processing_config?.smart_import) {
-      message.warning(t("项目正在导入中，请稍后再查看详情"))
+      message.warning(t("The project is being imported; please check back later for details."))
       return
     }
     
