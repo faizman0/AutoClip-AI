@@ -60,7 +60,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({ project, onDelete, onRetry, o
   const isExample = !!(project.settings?.example || project.processing_config?.example)
   const getCategoryInfo = (category?: string) => {
     const categoryMap: Record<string, string> = {
-      default: t("默认"), knowledge: t("知识科普"), business: t("商业财经"),
+      default: t("Default"), knowledge: t("Knowledge Science"), business: t("商业财经"),
       opinion: t("观点评论"), experience: t("经验分享"), speech: t("演讲脱口秀"),
       content_review: t("内容解说"), entertainment: t("娱乐内容"),
     }

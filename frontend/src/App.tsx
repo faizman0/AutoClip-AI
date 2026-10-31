@@ -16,7 +16,7 @@ import { startWorkflowObserver } from './analytics/observer'
 
 const { Content } = Layout
 
-// HashRouter 下手动上报 pageview（init 时已关闭自动 pageview）
+// Manual pageview report for HashRouter (auto pageview disabled at init)
 function usePageviewTracking() {
   const location = useLocation()
   useEffect(() => {

@@ -9,7 +9,7 @@ interface UseProjectPollingOptions {
 }
 
 export const useProjectPolling = ({
-  interval = 30000, // 默认30秒，减少频繁请求
+  interval = 30000, // Default30秒，减少频繁请求
   onProjectsUpdate,
   enabled = true
 }: UseProjectPollingOptions = {}) => {
