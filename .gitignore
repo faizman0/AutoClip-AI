@@ -157,3 +157,4 @@ control/
 
 # Python 打包产物
 *.egg-info/
+data/whisper-models/
