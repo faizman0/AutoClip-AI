@@ -1,6 +1,6 @@
 """
-统一的后端应用工厂函数
-支持 web 和 desktop 两种模式
+Unified backend application factory function
+Supports web and desktop modes
 """
 import logging
 import os
@@ -21,12 +21,12 @@ logger = logging.getLogger(__name__)
 
 def create_app(mode: str = "web") -> FastAPI:
     """
-    创建 FastAPI 应用实例
+    Create FastAPI application instance
     
     Args:
-        mode: 运行模式，支持 "web" 或 "desktop"
+        mode: Run mode, supports "web" or "desktop"
     """
-    # 设置模式环境变量
+    # Set mode environment variable
     os.environ["AUTOCLIP_MODE"] = mode
 
     if mode == "desktop":
@@ -37,9 +37,9 @@ def create_app(mode: str = "web") -> FastAPI:
         from backend.core.sentry_setup import init_sentry
         init_sentry(mode)
     except Exception as e:  # noqa: BLE001
-        logger.warning(f"Sentry 初始化失败（忽略）: {e}")
+        logger.warning(f"Sentry Initialization failed (ignored): {e}")
     
-    # 配置日志
+    # Configure logging
     logging_config = get_logging_config()
     logging.basicConfig(
         level=getattr(logging, logging_config["level"]),
@@ -130,11 +130,11 @@ def create_app(mode: str = "web") -> FastAPI:
         child_guard.kill_all()
         logger.info("WebSocket 网关服务已禁用")
     
-    # 注册路由
+    # 注册Routes
     app.include_router(health_router, prefix="/api/health", tags=["health"])
     app.include_router(api_router, prefix="/api/v1")
     
-    # 添加 video-categories 路由（统一到 api_router 中）
+    # 添加 video-categories Routes（统一到 api_router 中）
     @app.get("/api/v1/video-categories")
     async def get_video_categories():
         """获取视频分类配置."""

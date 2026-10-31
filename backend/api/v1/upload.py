@@ -1,5 +1,5 @@
 """
-投稿相关API路由 - 重构版本
+投稿相关APIRoutes - 重构版本
 移除bilitool依赖，使用直接API调用
 """
 

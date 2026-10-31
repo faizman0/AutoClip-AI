@@ -1,5 +1,5 @@
 """
-合集API路由
+合集APIRoutes
 """
 
 import logging

@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# 请求和响应模型
+# 请求和Response model
 class SubtitleEditRequest(BaseModel):
     project_id: str
     clip_id: str

@@ -1,5 +1,5 @@
 """
-WebSocket API路由
+WebSocket APIRoutes
 """
 
 import json

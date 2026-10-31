@@ -1,5 +1,5 @@
 """
-异步任务管理器
+Async task manager
 防止未捕获的异常导致后端重启
 """
 
@@ -12,7 +12,7 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 class AsyncTaskManager:
-    """异步任务管理器"""
+    """Async task manager"""
     
     def __init__(self):
         self.running_tasks: Dict[str, asyncio.Task] = {}

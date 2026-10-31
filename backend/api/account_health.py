@@ -11,7 +11,7 @@ from ..services.account_health_service import check_account_health_task, check_a
 
 router = APIRouter()
 
-# 请求模型
+# Request model
 class HealthCheckRequest(BaseModel):
     account_ids: Optional[List[int]] = None
     force_check: bool = False
@@ -20,7 +20,7 @@ class CookieRefreshRequest(BaseModel):
     account_id: int
     auto_refresh: bool = True
 
-# 响应模型
+# Response model
 class AccountHealthResponse(BaseModel):
     account_id: int
     username: str

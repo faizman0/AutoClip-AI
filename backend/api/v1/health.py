@@ -1,5 +1,5 @@
 """
-健康检查API路由
+健康检查APIRoutes
 """
 
 from fastapi import APIRouter

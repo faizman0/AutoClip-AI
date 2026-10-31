@@ -39,13 +39,13 @@ class CeleryConfig:
     worker_disable_rate_limits = True
     worker_concurrency = 1  # 强制设置并发数为1，防止重复处理
     
-    # 任务路由
+    # 任务Routes
     task_routes = {
         'backend.tasks.processing.*': {'queue': 'processing'},
         'backend.tasks.video.*': {'queue': 'video'},
         'backend.tasks.notification.*': {'queue': 'notification'},
-        'backend.tasks.upload.*': {'queue': 'upload'},  # 添加upload任务路由
-        'backend.tasks.import_processing.*': {'queue': 'processing'},  # 导入任务路由
+        'backend.tasks.upload.*': {'queue': 'upload'},  # 添加upload任务Routes
+        'backend.tasks.import_processing.*': {'queue': 'processing'},  # 导入任务Routes
     }
     
     # 定时任务配置

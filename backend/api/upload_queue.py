@@ -5,11 +5,11 @@ from pydantic import BaseModel
 
 from ..core.database import get_db
 from ..services.upload_queue_service import UploadQueueService, TaskPriority
-# from ..utils.auth import get_current_user  # 暂时注释掉，如需要可以实现
+# from ..utils.auth import get_current_user  # Temporarily commented out, can be implemented if needed
 
 router = APIRouter(prefix="/api/upload-queue", tags=["upload-queue"])
 
-# 请求模型
+# Request model
 class UploadTaskRequest(BaseModel):
     video_path: str
     title: str

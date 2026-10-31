@@ -1,15 +1,15 @@
 """
 API v1 package for FastAPI routes.
-统一管理所有API路由
+Unified management of all API routes
 """
 import os
 
 from fastapi import APIRouter
 
-# 创建主路由器
+# 创建主Routes器
 api_router = APIRouter()
 
-# 导入所有路由模块
+# 导入所有Routes模块
 from .health import router as health_router
 from .projects import router as projects_router
 from .clips import router as clips_router
@@ -33,7 +33,7 @@ from .publish import router as publish_router
 from ..upload_queue import router as upload_queue_router
 from ..account_health import router as account_health_router
 
-# 注册所有路由
+# 注册所有Routes
 api_router.include_router(health_router, prefix="/health", tags=["health"])
 api_router.include_router(projects_router, prefix="/projects", tags=["projects"])
 api_router.include_router(clips_router, prefix="/clips", tags=["clips"])
@@ -49,7 +49,7 @@ api_router.include_router(subtitle_editor_router, prefix="/subtitle-editor", tag
 api_router.include_router(upload_router, tags=["upload"])
 api_router.include_router(progress_router, prefix="/progress", tags=["progress"])
 api_router.include_router(pipeline_control_router, prefix="/pipeline", tags=["pipeline"])
-# 调试路由能直接往发布通道塞消息，只在显式开启时挂载
+# 调试Routes能直接往发布通道塞消息，只在显式开启时挂载
 if os.getenv("AUTOCLIP_ENABLE_DEBUG_ROUTES", "").lower() in ("1", "true", "yes"):
     api_router.include_router(debug_router, tags=["debug"])
 api_router.include_router(simple_progress_router, tags=["simple-progress"])

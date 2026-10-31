@@ -1,6 +1,6 @@
 """
 修复的简化Celery应用配置
-解决任务路由和状态更新问题
+解决任务Routes和状态更新问题
 """
 
 import os
@@ -46,7 +46,7 @@ celery_app.conf.update(
     result_expires=3600,
     task_ignore_result=False,
     
-    # 任务路由配置
+    # 任务Routes配置
     task_routes={
         'backend.tasks.processing.*': {'queue': 'processing'},
         'backend.tasks.video.*': {'queue': 'upload'},
