@@ -1,4 +1,4 @@
-export const HTML_TEMPLATE_CHOICES = ['editorial', 'street', 'classic'] as const
+export const HTML_TEMPLATE_CHOICES = ['editorial', 'street', 'classic', 'ez_clip'] as const
 export type HtmlTemplateChoice = (typeof HTML_TEMPLATE_CHOICES)[number]
 export type EditingStyle = HtmlTemplateChoice
 export const DEFAULT_HTML_TEMPLATE: HtmlTemplateChoice = 'editorial'
@@ -25,19 +25,19 @@ const EMPTY_SIGNALS: StyleSignals = {
 }
 
 export function chosenTemplate(value: string | undefined): HtmlTemplateChoice {
-  return value === 'street' || value === 'classic' ? value : DEFAULT_HTML_TEMPLATE
+  return value === 'street' || value === 'classic' || value === 'ez_clip' ? value : DEFAULT_HTML_TEMPLATE
 }
 
 /** Import fields for the HTML template. The flag-off path sends nothing. */
 export function templateImportFields(enabled: boolean, value: string | undefined, recommended?: string | null): { html_template?: HtmlTemplateChoice; recommended_template?: HtmlTemplateChoice } {
   if (!enabled) return {}
   const html_template = chosenTemplate(value)
-  const recommended_template = recommended === 'editorial' || recommended === 'street' || recommended === 'classic' ? recommended : undefined
+  const recommended_template = recommended === 'editorial' || recommended === 'street' || recommended === 'classic' || recommended === 'ez_clip' ? recommended : undefined
   return recommended_template ? { html_template, recommended_template } : { html_template }
 }
 
 export function isEditingStyle(value: unknown): value is EditingStyle {
-  return value === 'editorial' || value === 'street' || value === 'classic'
+  return value === 'editorial' || value === 'street' || value === 'classic' || value === 'ez_clip'
 }
 
 function oneOf<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {

@@ -55,7 +55,7 @@ export interface Draft {
   aspect: 'original' | 'portrait' | 'landscape'; layout: 'fit' | 'crop' | 'blur' | 'window'
   crop_x?: number; title_style?: 'plain' | 'impact' | 'card' | 'comic' | 'neon' | 'arena' | 'editorial' | 'pixel' | 'frosted'
   title_template_version?: 1 | 2 | 3 | 4 | 5 | 6; title_motion?: boolean; title_scale?: number; title_y?: number; title_accent?: string | null
-  subtitles: boolean; subtitle_style?: SubtitleStyle; original_audio: boolean; revision: number; updated_at: string; origin: string
+  subtitles: boolean; subtitle_style?: SubtitleStyle; editing_style_id?: string | null; editing_style_version?: number | null; editing_style_motion?: boolean; original_audio: boolean; revision: number; updated_at: string; origin: string
   parent_draft_id?: string | null; parent_revision?: number | null
   /** Automatic template packaging; kept as-is on save so edits never drop it. */
   packaging?: Packaging | null
@@ -141,7 +141,8 @@ export interface ImportOptions {
   goal: 'auto' | Goal; language: Language; aspect: Draft['aspect'] | null
   duration: number | null; instruction: string
   portrait_style?: 'auto' | 'interview' | 'podcast'
-  html_template?: 'editorial' | 'street' | 'classic'
+  editing_style_id?: string
+  html_template?: 'editorial' | 'street' | 'classic' | 'ez_clip'
 }
 export type AnalysisMode = 'subtitle' | 'visual'
 export interface AnalysisPreferences { analysis_mode: AnalysisMode | 'auto'; allow_visual_screening: boolean }

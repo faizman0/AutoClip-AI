@@ -1,15 +1,15 @@
 """
-Whisper 模型管理服务（faster-whisper）
+Whisper model management service (faster-whisper)
 
-负责 Systran/faster-whisper 模型的下载、状态检查、删除。模型从 HuggingFace 拉取，
-统一缓存到 `<data_dir>/whisper-models`（由 whisper_runtime 设置 HF_HOME）。
-依赖（huggingface_hub）来自运行时安装目录，所有相关 import 都延迟到函数内。
+Responsible for downloading, status checking, and deleting Systran/faster-whisper models. Models are pulled from HuggingFace
+and cached uniformly in `<data_dir>/whisper-models` (HF_HOME is set by whisper_runtime).
+Dependencies (huggingface_hub) come from the runtime installation directory; all related imports are deferred to inside functions.
 
-下载源（AUTOCLIP_WHISPER_MODEL_SOURCE，RC156 Win QA #6）：
-- auto（默认）：先连 huggingface.co，失败再走 hf-mirror.com（国内网络常连不上官方）。
-- huggingface：只用官方源；hf-mirror：只用镜像。
-用户自己设置了 HF_ENDPOINT 时尊重它，不再自动切换。走镜像时必须关掉 hf_xet：
-xet 存储直连 cas-server.xethub.hf.co，不经过 HF_ENDPOINT（QA 实测 401）。
+Download sources (AUTOCLIP_WHISPER_MODEL_SOURCE, RC156 Win QA #6):
+- auto (default): try huggingface.co first, and fall back to hf-mirror.com on failure (domestic networks often cannot reach the official source).
+- huggingface: use only the official source; hf-mirror: use only the mirror.
+If the user has set HF_ENDPOINT themselves, respect it and do not switch automatically. When using the mirror, hf_xet must be disabled:
+xet storage connects directly to cas-server.xethub.hf.co, bypassing HF_ENDPOINT (QA measured 401).
 """
 import logging
 import os
@@ -26,10 +26,10 @@ logger = logging.getLogger(__name__)
 
 
 def _silence_download_progress() -> None:
-    """关掉 HuggingFace / tqdm 进度条。
+    """Disable HuggingFace / tqdm progress bars.
 
-    PYTHON-FASTAPI-H / A：桌面端 stdout 不是控制台时，tqdm.status_printer
-    写 ``\\r`` 会抛 OSError / BrokenPipeError，下载被中断。
+    PYTHON-FASTAPI-H / A: When desktop stdout is not a console, tqdm.status_printer
+    writing ``\\r`` throws OSError / BrokenPipeError, and the download is interrupted.
     """
     os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
     os.environ.setdefault("TQDM_DISABLE", "1")
@@ -78,15 +78,15 @@ def _disable_xet() -> None:
 
 
 def canonical_model_name(model_name: str) -> str:
-    # SpeechRecognitionConfig 兼容旧配置的 large 别名。
+    # SpeechRecognitionConfig is compatible with the legacy `large` alias.
     return "large-v3" if model_name == "large" else model_name
 
 
 class ModelStatus(str, Enum):
-    AVAILABLE = "available"      # 运行时就绪、可下载
-    DOWNLOADING = "downloading"  # 下载中
-    DOWNLOADED = "downloaded"    # 已下载
-    ERROR = "error"              # 错误（通常是运行时未安装）
+    AVAILABLE = "available"      # Runtime ready, downloadable
+    DOWNLOADING = "downloading"  # Downloading
+    DOWNLOADED = "downloaded"    # Downloaded
+    ERROR = "error"              # Error (usually runtime not installed)
     NOT_FOUND = "not_found"
 
 
@@ -103,35 +103,35 @@ class ModelInfo:
     download_progress: Optional[int] = None
     local_path: Optional[str] = None
     error_message: Optional[str] = None
-    source: Optional[str] = None  # 实际下载用的源：huggingface / hf-mirror / custom
+    source: Optional[str] = None  # The source actually used for download: huggingface / hf-mirror / custom
 
 
-# 模型名 -> HuggingFace 仓库 + 展示信息（faster-whisper / CTranslate2 模型）
+# Model name -> HuggingFace repo + display info (faster-whisper / CTranslate2 models)
 _MODELS = {
     "tiny": {
         "repo_id": "Systran/faster-whisper-tiny",
         "size": "~75 MB", "size_bytes": 75 * 1024 * 1024,
-        "description": "最快，准确度较低，适合快速预览", "accuracy": "较低", "speed": "最快",
+        "description": "Fastest, lower accuracy, suitable for quick previews", "accuracy": "Low", "speed": "Fastest",
     },
     "base": {
         "repo_id": "Systran/faster-whisper-base",
         "size": "~145 MB", "size_bytes": 145 * 1024 * 1024,
-        "description": "平衡之选，推荐日常使用", "accuracy": "中等", "speed": "快",
+        "description": "A balanced choice, recommended for daily use", "accuracy": "Medium", "speed": "Fast",
     },
     "small": {
         "repo_id": "Systran/faster-whisper-small",
         "size": "~488 MB", "size_bytes": 488 * 1024 * 1024,
-        "description": "较好准确度，适合重要内容", "accuracy": "较好", "speed": "中等",
+        "description": "Good accuracy, suitable for important content", "accuracy": "Good", "speed": "Medium",
     },
     "medium": {
         "repo_id": "Systran/faster-whisper-medium",
         "size": "~1.5 GB", "size_bytes": 1500 * 1024 * 1024,
-        "description": "高准确度，适合专业用途", "accuracy": "高", "speed": "较慢",
+        "description": "High accuracy, suitable for professional use", "accuracy": "High", "speed": "Slower",
     },
     "large-v3": {
         "repo_id": "Systran/faster-whisper-large-v3",
         "size": "~3 GB", "size_bytes": 3000 * 1024 * 1024,
-        "description": "最高准确度", "accuracy": "最高", "speed": "最慢",
+        "description": "Highest accuracy", "accuracy": "Highest", "speed": "Slowest",
     },
 }
 
@@ -142,7 +142,7 @@ def repo_id_for(model_name: str) -> Optional[str]:
 
 
 def _snapshot_is_complete(snapshot: Path) -> bool:
-    """HF 会在权重下载完成前创建 snapshot；目录存在不代表可以离线转写。"""
+    """HF creates the snapshot before the weights finish downloading; the directory existing does not mean offline transcription is possible."""
     try:
         required = [snapshot / name for name in ("model.bin", "config.json", "tokenizer.json")]
         vocabulary = list(snapshot.glob("vocabulary.*"))
@@ -161,10 +161,10 @@ class WhisperModelManager:
         self._download_state: Dict[str, Dict] = {}
         self._lock = threading.Lock()
 
-    # ---- 路径 / 状态 ----
+    # ---- Paths / status ----
     def _model_cache_dir(self, model_name: str) -> Path:
         repo = self.model_configs[model_name]["repo_id"]
-        # HF 缓存目录命名：models--<org>--<name>
+        # HF cache directory naming: models--<org>--<name>
         return whisper_runtime.get_models_dir() / "hub" / ("models--" + repo.replace("/", "--"))
 
     def get_local_model_path(self, model_name: str) -> Optional[Path]:
@@ -178,7 +178,7 @@ class WhisperModelManager:
             ref = d / "refs" / "main"
             if ref.is_file():
                 revision = ref.read_text(encoding="utf-8").strip()
-                # 只选当前缓存内的 snapshot，不使用任意路径。
+                # Only select a snapshot within the current cache; do not use arbitrary paths.
                 candidates.sort(key=lambda path: path.name != revision)
             return next((path for path in candidates if _snapshot_is_complete(path)), None)
         except OSError:
@@ -197,7 +197,7 @@ class WhisperModelManager:
         if self._is_downloaded(model_name):
             return ModelStatus.DOWNLOADED
         if not whisper_runtime.is_installed():
-            return ModelStatus.ERROR  # 运行时没装，模型也用不了
+            return ModelStatus.ERROR  # Runtime not installed, so the model is unusable too
         return ModelStatus.AVAILABLE
 
     def _info(self, model_name: str) -> ModelInfo:
@@ -224,16 +224,16 @@ class WhisperModelManager:
             return None
         return self._info(model_name)
 
-    # ---- 下载（后台线程，非阻塞）----
+    # ---- Download (background thread, non-blocking) ----
     async def download_model(self, model_name: str) -> str:
         """Start a background download. Returns "installed" or "downloading", never "done".
 
         The download finishes (or fails) later: callers poll get_model_info (RC156 Win QA #5).
         """
         if model_name not in self.model_configs:
-            raise ValueError(f"不支持的模型: {model_name}")
+            raise ValueError(f"Unsupported model: {model_name}")
         if not whisper_runtime.is_installed():
-            raise RuntimeError("请先安装 Whisper 运行时")
+            raise RuntimeError("Please install the Whisper runtime first")
         if self._is_downloaded(model_name):
             # A complete resumed cache must recover a previous download error
             # immediately, without requiring an application restart.
@@ -263,7 +263,7 @@ class WhisperModelManager:
         """
         model_name = canonical_model_name(model_name)
         if model_name not in self.model_configs:
-            raise ValueError(f"不支持的模型: {model_name}")
+            raise ValueError(f"Unsupported model: {model_name}")
         local = self.get_local_model_path(model_name)
         if local is not None:
             return local
@@ -285,7 +285,7 @@ class WhisperModelManager:
         if local is None:
             with self._lock:
                 error = (self._download_state.get(model_name) or {}).get("error")
-            raise RuntimeError(error or f"Whisper 模型 {model_name} 下载未完成")
+            raise RuntimeError(error or f"Whisper model {model_name} download incomplete")
         return local
 
     def _download_blocking(self, model_name: str) -> None:
@@ -299,7 +299,7 @@ class WhisperModelManager:
             for index, (source, endpoint) in enumerate(plan):
                 if endpoint != OFFICIAL_ENDPOINT:
                     _disable_xet()
-                logger.info("开始下载 Whisper 模型 %s (%s, 源 %s)", model_name, repo_id, source)
+                logger.info("Starting download of Whisper model %s (%s, source %s)", model_name, repo_id, source)
                 try:
                     snapshot = snapshot_download(
                         repo_id=repo_id,
@@ -307,27 +307,27 @@ class WhisperModelManager:
                         endpoint=endpoint,
                     )
                     if not _snapshot_is_complete(Path(snapshot)):
-                        raise RuntimeError("Whisper 模型文件不完整，请重新下载模型后再试。")
+                        raise RuntimeError("Whisper model files are incomplete. Please re-download the model and try again.")
                 except Exception as e:  # noqa: BLE001
                     failures.append(f"{source}: {type(e).__name__}: {e}")
                     if index + 1 < len(plan):
-                        logger.warning("Whisper 模型 %s 从 %s 下载失败（%s），改用 %s",
+                        logger.warning("Whisper model %s failed to download from %s (%s), switching to %s",
                                        model_name, source, type(e).__name__, plan[index + 1][0])
                         continue
                     if len(failures) > 1:
-                        raise RuntimeError("；".join(failures)) from e
+                        raise RuntimeError("; ".join(failures)) from e
                     raise
                 with self._lock:
                     self._download_state[model_name] = {
                         "status": "downloaded", "progress": 100, "error": None, "source": source,
                     }
-                logger.info("Whisper 模型 %s 下载完成（源 %s）", model_name, source)
+                logger.info("Whisper model %s download complete (source %s)", model_name, source)
                 return
         except Exception as e:  # noqa: BLE001
-            # 已处理失败只记 warning：LoggingIntegration(event_level=ERROR) + exc_info
-            # 会把 tqdm 写控制台这类可恢复错误打进 Sentry。
+            # Handled failures are logged only as warning: LoggingIntegration(event_level=ERROR) + exc_info
+            # would send recoverable errors like tqdm writing to the console to Sentry.
             logger.warning(
-                "下载 Whisper 模型 %s 失败: %s: %s",
+                "Failed to download Whisper model %s: %s: %s",
                 model_name, type(e).__name__, e,
             )
             with self._lock:
@@ -346,7 +346,7 @@ class WhisperModelManager:
         return st.get("progress")
 
     def cancel_download(self, model_name: str) -> bool:
-        # snapshot_download 不易中断；这里只清状态，已下载分片保留可续传
+        # snapshot_download is not easy to interrupt; this only clears the state, and downloaded shards are kept for resuming
         with self._lock:
             if model_name in self._download_state and self._download_state[model_name].get("status") == "downloading":
                 self._download_state[model_name] = {"status": "available", "progress": 0, "error": None}
@@ -363,10 +363,10 @@ class WhisperModelManager:
                 shutil.rmtree(d, ignore_errors=True)
             with self._lock:
                 self._download_state.pop(model_name, None)
-            logger.info(f"Whisper 模型 {model_name} 已删除")
+            logger.info(f"Whisper model {model_name} deleted")
             return True
         except Exception as e:  # noqa: BLE001
-            logger.error(f"删除 Whisper 模型 {model_name} 失败: {e}")
+            logger.error(f"Failed to delete Whisper model {model_name}: {e}")
             return False
 
 

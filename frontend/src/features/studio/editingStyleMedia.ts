@@ -1,12 +1,14 @@
 import editorialPoster from '../../assets/editing-style/editorial.poster.webp'
 import streetPoster from '../../assets/editing-style/street.poster.webp'
 import classicPoster from '../../assets/editing-style/classic.poster.webp'
+import ezClipPoster from '../../assets/editing-style/ez-clip.poster.webp'
 import type { EditingStyle } from './editingStyle'
 
 export const STYLE_POSTERS: Record<EditingStyle, string> = {
   editorial: editorialPoster,
   street: streetPoster,
   classic: classicPoster,
+  ez_clip: ezClipPoster,
 }
 
 type PreviewUrls = { webm: string; mp4: string }
@@ -23,6 +25,10 @@ const loaders: Record<EditingStyle, () => Promise<PreviewUrls>> = {
   classic: async () => ({
     webm: (await import('../../assets/editing-style/classic.preview.webm?url')).default,
     mp4: (await import('../../assets/editing-style/classic.preview.mp4?url')).default,
+  }),
+  ez_clip: async () => ({
+    webm: (await import('../../assets/editing-style/ez-clip.preview.webm?url')).default,
+    mp4: (await import('../../assets/editing-style/ez-clip.preview.mp4?url')).default,
   }),
 }
 

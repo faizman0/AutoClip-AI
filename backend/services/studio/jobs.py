@@ -497,14 +497,16 @@ def run_content(project_id, video):
 
     return clips
 
-def _apply_strategy(draft, strategy_id, *, burned_subtitles=False, layout=None):
+def _apply_strategy(draft, strategy_id, *, burned_subtitles=False, layout=None, editing_style_id=None):
     """Materialize platform packaging defaults without reinterpreting content.
 
     When the source already has subtitles in the picture, do not stack a second track, and
     keep the full frame on vertical outputs so cropping cannot cut the original lines.
     `layout` overrides the strategy default once framing has decided crop vs full frame.
+    `editing_style_id` applies EZ Clip or other registered editing styles.
     """
     from backend.services.platform_strategy import platform_strategy
+    from backend.services.studio.editing_styles import get_editing_style
     strategy = platform_strategy(strategy_id)
     value = dict(draft)
     layout = layout or (strategy.layout if strategy.layout != 'none' else value.get('layout', 'fit'))
@@ -519,6 +521,15 @@ def _apply_strategy(draft, strategy_id, *, burned_subtitles=False, layout=None):
         title_style=strategy.title_style,
         title_motion=strategy.title_motion,
     )
+    # Apply editing style overrides if specified.
+    if editing_style_id:
+        style_preset = get_editing_style(editing_style_id)
+        if style_preset:
+            value['editing_style_id'] = editing_style_id
+            value['editing_style_version'] = style_preset.version
+            # EZ Clip overrides subtitle style.
+            if editing_style_id == 'ez_clip':
+                value['subtitle_style'] = 'ez_clip'
     if strategy.template == 'landscape' and strategy_id != 'original' and value.get('language', 'source') == 'source':
         # No template packaging here: the legacy captions and hook are translated at render time
         # (skipped when already in this language), so English YouTube never burns Chinese text.
@@ -1124,7 +1135,9 @@ def _auto_generate(project_id, plan):
                 value = _apply_packaging(project_id, value, strategy_id, burned, packaging_cache)
                 value = _audience_title(value, strategy_id, posts.get((_content_key(value), strategy_id)))
             layout = 'crop' if use_html and framed != 'full_frame_captions' else (value.get('layout') if framed else None)
-            draft = _apply_strategy(value, strategy_id, burned_subtitles=burned, layout=layout)
+            generation = state.get('generation', {})
+            editing_style_id = generation.get('editing_style_id')
+            draft = _apply_strategy(value, strategy_id, burned_subtitles=burned, layout=layout, editing_style_id=editing_style_id)
             derived_drafts.append(draft.model_dump())
             variants.append({
                 'id': uuid.uuid4().hex, 'draft_id': draft.id, 'draft_revision': draft.revision,
@@ -1224,7 +1237,9 @@ def append_platform_variants(project_id, platforms, branding):
             inherited = html_by_signature.get(signature) if now and strategy.aspect == 'portrait' else None
             rank_fallback = signature in rank_signatures and now and strategy.aspect == 'portrait' and not inherited
             layout = 'crop' if inherited and framed != 'full_frame_captions' else (value.get('layout') if framed else None)
-            draft = _apply_strategy(value, strategy_id, burned_subtitles=burned, layout=layout)
+            generation = state.get('generation', {})
+            editing_style_id = generation.get('editing_style_id')
+            draft = _apply_strategy(value, strategy_id, burned_subtitles=burned, layout=layout, editing_style_id=editing_style_id)
             derived.append(draft.model_dump())
             variants.append({
                 'id': uuid.uuid4().hex, 'draft_id': draft.id, 'draft_revision': 1,
@@ -1388,7 +1403,10 @@ def _produce_on_demand(project_id, variant_id):
         value = _apply_packaging(project_id, value, strategy_id, burned, {})
         posts = _posts_for(project_id, [(strategy_id, value)], {})
         value = _audience_title(value, strategy_id, posts.get((_content_key(value), strategy_id)))
-        draft = _apply_strategy(value, strategy_id, burned_subtitles=burned, layout=value.get('layout') if framed else None).model_dump()
+        state = store.read(project_id)
+        generation = state.get('generation', {})
+        editing_style_id = generation.get('editing_style_id')
+        draft = _apply_strategy(value, strategy_id, burned_subtitles=burned, layout=value.get('layout') if framed else None, editing_style_id=editing_style_id).model_dump()
 
         def ready(data):
             for index, item in enumerate(data['drafts']):
@@ -1498,6 +1516,7 @@ def inspect_project(project_id, options, url=None, browser=None, *, producer=Non
             'branding': options.branding.model_dump(),
             'auto_start': options.auto_start,
             'portrait_style': options.portrait_style,
+            **({'editing_style_id': options.editing_style_id} if getattr(options, 'editing_style_id', None) else {}),
             **({'html_template': options.html_template} if getattr(options, 'html_template', None) else {}),
             **({'recommended_template': options.recommended_template} if getattr(options, 'recommended_template', None) else {}),
             **({'accepted_recommendation': options.html_template == options.recommended_template} if getattr(options, 'recommended_template', None) and getattr(options, 'html_template', None) else {}),

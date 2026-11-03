@@ -101,7 +101,8 @@ async def import_visual(
     platforms: list[str] = Form(['douyin']),
     auto_start: bool = Form(False),
     portrait_style: Literal['auto', 'interview', 'podcast'] = Form('auto'),
-    html_template: Optional[Literal['editorial', 'street', 'classic']] = Form(None),
+    editing_style_id: Optional[str] = Form(None),
+    html_template: Optional[Literal['editorial', 'street', 'classic', 'ez_clip']] = Form(None),
     recommended_template: Optional[Literal['editorial', 'street', 'classic']] = Form(None),
     brand_outro_enabled: bool = Form(True),
     subtitle: Optional[UploadFile] = File(None),
@@ -138,7 +139,8 @@ async def import_visual(
             await subtitle.close()
     prefs = ImportOptions(
         goal=goal, language=language, aspect=aspect, duration=duration, instruction=instruction,
-        platforms=platforms, auto_start=auto_start, portrait_style=portrait_style, html_template=html_template,
+        platforms=platforms, auto_start=auto_start, portrait_style=portrait_style, 
+        editing_style_id=editing_style_id, html_template=html_template,
         recommended_template=recommended_template,
         branding={'outro_enabled': brand_outro_enabled},
     )

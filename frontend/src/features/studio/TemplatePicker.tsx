@@ -12,6 +12,7 @@ const COPY: Record<HtmlTemplateChoice, { name: string; hint: string }> = {
   editorial: { name: 'editing_style.editorial.name', hint: 'editing_style.editorial.desc' },
   street: { name: 'editing_style.street.name', hint: 'editing_style.street.desc' },
   classic: { name: 'editing_style.classic.name', hint: 'editing_style.classic.desc' },
+  ez_clip: { name: 'editing_style.ez_clip.name', hint: 'editing_style.ez_clip.desc' },
 }
 
 export default function TemplatePicker({

@@ -26,7 +26,7 @@ class PlatformStrategy:
     # Hard platform limit only (e.g. YouTube Shorts 180 s). Longer outputs are trimmed at a
     # sentence boundary. Platforms that accept long uploads leave this None so content stays whole.
     max_duration_sec: int | None
-    subtitle_style: Literal["clean", "bold", "box", "accent"]
+    subtitle_style: Literal["clean", "bold", "box", "accent", "ez_clip"]
     title_style: str
     title_motion: bool
     cover_aspect: Literal["portrait", "landscape", "original"]

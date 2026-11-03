@@ -164,7 +164,10 @@ class Draft(BaseModel):
     title_y: float = Field(default=.12, ge=.06, le=.70, allow_inf_nan=False)
     title_accent: str | None = Field(default=None, pattern=r'^#[0-9a-fA-F]{6}$')
     subtitles: bool = True
-    subtitle_style: Literal['clean', 'bold', 'box', 'accent'] = 'clean'
+    subtitle_style: Literal['clean', 'bold', 'box', 'accent', 'ez_clip'] = 'clean'
+    editing_style_id: str | None = Field(default=None, pattern=r'^[a-z0-9_]{2,32}$')
+    editing_style_version: int | None = Field(default=None, ge=1)
+    editing_style_motion: bool = True
     original_audio: bool = True
     revision: int = Field(default=1, ge=1)
     updated_at: str = ''
@@ -300,7 +303,8 @@ class ImportOptions(BaseModel):
     platforms: list[str] = Field(default_factory=lambda: ['douyin'], min_length=1, max_length=8)
     auto_start: bool = False
     portrait_style: Literal['auto', 'interview', 'podcast'] = 'auto'
-    html_template: Literal['editorial', 'street', 'classic'] | None = None
+    editing_style_id: str | None = Field(default=None, pattern=r'^[a-z0-9_]{2,32}$')
+    html_template: Literal['editorial', 'street', 'classic', 'ez_clip'] | None = None
     recommended_template: Literal['editorial', 'street', 'classic'] | None = None
     branding: BrandingOptions = Field(default_factory=BrandingOptions)
 

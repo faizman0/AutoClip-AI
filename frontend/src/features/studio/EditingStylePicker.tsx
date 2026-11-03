@@ -18,6 +18,7 @@ const COPY: Record<EditingStyle, { name: string; desc: string }> = {
   editorial: { name: 'editing_style.editorial.name', desc: 'editing_style.editorial.desc' },
   street: { name: 'editing_style.street.name', desc: 'editing_style.street.desc' },
   classic: { name: 'editing_style.classic.name', desc: 'editing_style.classic.desc' },
+  ez_clip: { name: 'editing_style.ez_clip.name', desc: 'editing_style.ez_clip.desc' },
 }
 
 function previewUrl(node: HTMLVideoElement, urls: { webm: string; mp4: string }): string {
