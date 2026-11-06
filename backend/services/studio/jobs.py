@@ -1622,17 +1622,20 @@ def confirm_project(project_id, body):
         if route == 'visual' and body.goals == ['content']:
             raise ValueError('内容切片当前使用字幕分析，请选择字幕模式后确认')
         if route == 'visual':
-            from backend.services.studio import intelligence
+            from backend.services.studio import preflight, intelligence
             if not intelligence.ready():
                 raise ValueError('视觉模型不可用，请配置后重新确认；原素材已保留')
         if route == 'subtitle' or 'content' in body.goals:
             # Too short / no audio and no SRT: refuse before production spends any model call (RC156 #10/#11).
             from backend.pipeline import media_precheck
+            from backend.services.studio import preflight
             video = source(project_id)
-            blocked = media_precheck.subtitle_route_failure(
-                video, srt_available=(video.parent / 'input.srt').is_file(), duration=plan.get('source_duration'))
-            if blocked:
-                raise ValueError(str(blocked))
+            subtitle = video.parent / 'input.srt'
+            inputs = preflight.ResolvedInputs(video, subtitle if subtitle.is_file() else None, entry='studio', goal='auto')
+            material = preflight.probe_from_info(video, {'duration': plan.get('source_duration'), 'audio': None})
+            failure = preflight.preflight(inputs, probe=material).source_failure
+            if failure:
+                raise ValueError(failure)
         previous = deepcopy(state)
         plan['confirmed_analysis'] = route
         plan['selected_goals'] = body.goals

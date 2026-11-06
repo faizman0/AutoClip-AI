@@ -276,10 +276,14 @@ class SimplePipelineAdapter:
             emit_progress(self.project_id, "INGEST", "Material preparation complete")
             # Source video shorter than the minimum clip length, or no audio track and no subtitles: the subtitle route is doomed, block it up front and do not call any model (RC156 #10/#11)
             from backend.pipeline import media_precheck
-            blocked = media_precheck.subtitle_route_failure(
-                input_video_path, srt_available=bool(input_srt_path and Path(input_srt_path).exists()))
-            if blocked:
-                raise blocked
+            from backend.services.studio import preflight
+            path = Path(input_video_path)
+            subtitle = path.parent / 'input.srt'
+            inputs = preflight.ResolvedInputs(path, subtitle if subtitle.is_file() else None, entry='studio', goal='auto')
+            material = preflight.probe_from_info(path, {'duration': metadata.get('duration'), 'audio': metadata.get('audio')})
+            failure = preflight.preflight(inputs, probe=material).source_failure
+            if failure:
+                raise ValueError(failure)
             self._preflight_llm()
             checkpoint(self.project_id)
 
