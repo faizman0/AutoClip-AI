@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-autoclip — CLI video editing.
+autoclip — 命令行出片。
 
-    autoclip run video.mp4                         # Use models configured in desktop app
-    autoclip run video.mp4 --provider ollama       # Local Ollama (default qwen2.5:7b, no key required)
+    autoclip run video.mp4                         # 用桌面应用里配好的模型
+    autoclip run video.mp4 --provider ollama       # 本地 Ollama（默认 qwen2.5:7b，无需 key）
     autoclip run video.mp4 --provider lmstudio --model qwen2.5-7b-instruct
     AUTOCLIP_API_KEY=sk-... autoclip run video.mp4 --provider openai --base-url https://api.deepseek.com/v1 --model deepseek-chat
     autoclip run video.mp4 --srt video.srt --min-score 0.6 --json
@@ -11,8 +11,8 @@ autoclip — CLI video editing.
     autoclip publish <project_id> --clip 2 --platform tiktok --platform youtube   # 经 Upload-Post 发到海外平台
     autoclip mcp install opencode                  # 把 AutoClip 写进 opencode 的 MCP 配置（默认全局）
 
-Output shares same data directory with desktop app（mac: ~/Library/Application Support/AutoClip），
-Results visible on desktop app homepage after completion。用 --data-dir 或 AUTOCLIP_DATA_DIR 可以换目录。
+产物与桌面应用共用同一个数据目录（mac: ~/Library/Application Support/AutoClip），
+跑完在桌面应用首页就能看到。用 --data-dir 或 AUTOCLIP_DATA_DIR 可以换目录。
 
 不装包也能用：`python -m backend.cli ...`；`pip install -e .` 之后有 `autoclip` 命令。
 """
@@ -38,8 +38,8 @@ from backend.services.local_runner import (
 )
 
 STAGE_NAMES = {
-    "INGEST": "Preparing", "SUBTITLE": "Subtitle", "ANALYZE": "Analyzing",
-    "HIGHLIGHT": "Highlight", "EXPORT": "Exporting", "DONE": "Done",
+    "INGEST": "准备", "SUBTITLE": "字幕", "ANALYZE": "分析",
+    "HIGHLIGHT": "选段", "EXPORT": "导出", "DONE": "完成",
 }
 _TTY = sys.stderr.isatty()
 

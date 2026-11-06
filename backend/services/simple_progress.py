@@ -1,8 +1,9 @@
 """
-Simplified progress service - fixed stages + fixed weights
-Based on the "keep it dumb and stable" approach you proposed
+简化的进度服务 - 固定阶段 + 固定权重
+基于你提出的"做笨做稳"方案
 """
 
+import math
 import time
 import json
 import logging
@@ -11,26 +12,38 @@ import sqlite3
 import threading
 import os
 try:
-    import redis  # optional dependency
+    import redis  # 可选依赖
 except Exception:
     redis = None
 
 logger = logging.getLogger(__name__)
 
-# Fixed stage definitions - adjust according to your actual project
+# 固定阶段定义 - 根据你的项目实际调整
 STAGES: List[Tuple[str, int]] = [
-    ("INGEST", 10),        # Download/ready
-    ("SUBTITLE", 15),      # Subtitles/alignment
-    ("ANALYZE", 20),       # Semantic analysis/outline
-    ("HIGHLIGHT", 25),     # Clip localization/scoring
-    ("EXPORT", 20),        # Export/packaging
-    ("DONE", 10),          # Validation/archiving
+    ("INGEST", 10),        # 下载/就绪
+    ("SUBTITLE", 15),      # 字幕/对齐
+    ("ANALYZE", 20),       # 语义分析/大纲
+    ("HIGHLIGHT", 25),     # 片段定位/打分
+    ("EXPORT", 20),        # 导出/封装
+    ("DONE", 10),          # 校验/归档
 ]
 
-# Stage weight mapping
+# 阶段权重映射
 WEIGHTS = {name: w for name, w in STAGES}
-# Stage order
+# 阶段顺序
 ORDER = [name for name, _ in STAGES]
+
+# Within a stage that has no measured sub-percent (a long model call), ease toward
+# 90% of the band. The ceiling stays under the band end and under 95, so the bar
+# cannot sit on a fake 99. Completion is the only path to 100.
+EASE_TAU_SEC = 90.0
+EASE_FRACTION = 0.9
+EASE_CAP = 95
+
+# project_id -> (stage, baseline percent, monotonic time the baseline started)
+_ease_anchor: Dict[str, Tuple[str, int, float]] = {}
+# True once this run has a measured sub-percent. Heartbeats must not walk past it.
+_measured: Dict[str, bool] = {}
 
 class ProgressStore:
     def save(self, project_id: str, stage: str, percent: int, message: str, ts: int):
@@ -150,7 +163,7 @@ class SqliteProgressStore(ProgressStore):
         return results
 
 
-# Store selection: Desktop mode forces SQLite; Server mode prefers Redis and automatically falls back to SQLite on failure
+# 选择存储：Desktop模式强制SQLite；Server模式优先Redis，失败则自动降级到SQLite
 store: ProgressStore
 try:
     from backend.core.desktop_config import is_desktop_mode, get_desktop_paths
@@ -158,20 +171,20 @@ try:
         paths = get_desktop_paths()
         db_file = os.path.join(str(paths.data_dir), "progress.db")
         store = SqliteProgressStore(db_file)
-        logger.info(f"Desktop mode using SQLite progress store: {db_file}")
+        logger.info(f"桌面模式使用SQLite进度存储: {db_file}")
     else:
         if redis is None:
-            raise RuntimeError("redis is not installed")
-        # Get the Redis URL from the environment variable, defaulting to the local address
+            raise RuntimeError("redis 未安装")
+        # 从环境变量获取Redis URL，默认为本地地址
         redis_url = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
         r_client = redis.Redis.from_url(redis_url, decode_responses=True)
         r_client.ping()
         store = RedisProgressStore(r_client)
-        logger.info("Server mode using Redis progress store")
+        logger.info("Server模式使用Redis进度存储")
 except Exception as e:
-    # Automatically fall back to SQLite
+    # 自动降级到SQLite
     try:
-        # Prefer the desktop data directory; if unavailable, fall back to the project root data directory
+        # 优先使用桌面数据目录；若不可用则落到项目根 data 目录
         db_file = None
         try:
             from backend.core.desktop_config import get_desktop_paths
@@ -180,48 +193,90 @@ except Exception as e:
             from pathlib import Path
             db_file = str((Path(__file__).parent.parent.parent / 'data' / 'progress.db').resolve())
         store = SqliteProgressStore(db_file)
-        logger.warning(f"Redis unavailable or not installed, automatically falling back to SQLite progress store: {db_file}, reason: {e}")
+        logger.warning(f"Redis不可用或未安装，自动降级到SQLite进度存储: {db_file}，原因: {e}")
     except Exception as e2:
-        logger.error(f"Failed to initialize progress store: {e2}")
+        logger.error(f"初始化进度存储失败: {e2}")
         store = None
 
 
 def compute_percent(stage: str, subpercent: Optional[float] = None) -> int:
     """
-    Compute the percentage corresponding to a stage
+    计算阶段对应的百分比
     
     Args:
-        stage: Current stage name
-        subpercent: Sub-progress percentage (0-100), optional
+        stage: 当前阶段名称
+        subpercent: 子进度百分比 (0-100)，可选
         
     Returns:
-        Total progress percentage (0-100)
+        总进度百分比 (0-100)
     """
-    # Accumulate the weights of previous stages
+    # 累加之前阶段权重
     done = 0
     for s in ORDER:
         if s == stage:
             break
         done += WEIGHTS[s]
     
-    # Current stage
+    # 当前阶段
     cur = WEIGHTS.get(stage, 0)
     
     if subpercent is None:
-        # When switching stages, show up to the start of the current stage
+        # 阶段切换时，显示到当前阶段开始
         return min(100, done + cur) if stage == "DONE" else min(99, done)
     else:
-        # With sub-progress, convert linearly by weight
+        # 带子进度，按权重线性换算
         subpercent = max(0, min(100, subpercent))
         return min(99, done + int(cur * subpercent / 100))
 
 
-# In-process listeners (CLI / MCP use this to print progress in real time; not needed by the API process)
+def stage_band(stage: str) -> Tuple[int, int]:
+    """Display band for one stage. DONE is 100; every other stage stays under 100."""
+    if stage == "DONE":
+        return 100, 100
+    start = compute_percent(stage)
+    end = compute_percent(stage, 100)
+    return start, end
+
+
+def ease_percent(stage: str, base: int, elapsed_sec: float) -> int:
+    """Move `base` toward the stage ceiling. Monotonic, and never 100."""
+    if stage == "DONE":
+        return 100
+    if stage not in WEIGHTS:
+        return max(0, min(99, int(base)))
+    start, end = stage_band(stage)
+    if end <= start:
+        return max(0, min(99, int(base)))
+    ceiling = start + int((end - start) * EASE_FRACTION)
+    if ceiling >= end:
+        ceiling = end - 1
+    ceiling = min(EASE_CAP, max(start, ceiling))
+    floor = max(start, min(99, int(base)))
+    if floor >= ceiling:
+        return min(99, floor)
+    moved = (ceiling - floor) * (1.0 - math.exp(-max(0.0, elapsed_sec) / EASE_TAU_SEC))
+    return min(ceiling, floor + int(moved))
+
+
+def _rebase_ease(project_id: str, stage: str, percent: int) -> None:
+    _ease_anchor[project_id] = (stage, int(percent), time.time())
+
+
+def _mirror_studio(project_id: str, stage: str, percent: int, message: str, *, approximate: bool) -> None:
+    """Copy the project-scale percent into Studio. Progress display never fails the pipeline."""
+    try:
+        from backend.services.simple_pipeline_adapter import mirror_studio_progress
+        mirror_studio_progress(project_id, stage, percent, message, approximate=approximate)
+    except Exception:  # noqa: BLE001
+        logger.debug("studio progress mirror skipped", exc_info=True)
+
+
+# 进程内监听器（CLI / MCP 用来实时打印进度；API 进程用不到）
 _listeners: List[Any] = []
 
 
 def add_progress_listener(fn) -> None:
-    """Register an in-process progress callback: fn(payload: dict). payload contains project_id / stage / percent / message / ts."""
+    """注册进程内进度回调：fn(payload: dict)。payload 含 project_id / stage / percent / message / ts。"""
     if fn not in _listeners:
         _listeners.append(fn)
 
@@ -235,15 +290,18 @@ def remove_progress_listener(fn) -> None:
 
 def emit_progress(project_id: str, stage: str, message: str = "", subpercent: Optional[float] = None):
     """
-    Emit a progress event
+    发送进度事件
     
     Args:
-        project_id: Project ID
-        stage: Current stage
-        message: Progress message
-        subpercent: Sub-progress percentage, optional
+        project_id: 项目ID
+        stage: 当前阶段
+        message: 进度消息
+        subpercent: 子进度百分比，可选
     """
     percent = compute_percent(stage, subpercent)
+    measured = subpercent is not None or stage == "DONE"
+    _measured[project_id] = measured
+    _rebase_ease(project_id, stage, percent)
     payload = {
         "project_id": project_id,
         "stage": stage,
@@ -256,28 +314,78 @@ def emit_progress(project_id: str, stage: str, message: str = "", subpercent: Op
         try:
             fn(payload)
         except Exception as e:  # noqa: BLE001
-            logger.debug(f"Progress listener exception: {e}")
+            logger.debug(f"进度监听器异常: {e}")
 
     if not store:
-        logger.warning("Progress store not initialized, skipping progress emit")
+        logger.warning("进度存储未初始化，跳过进度发送")
+    else:
+        try:
+            store.save(project_id, stage, percent, message, payload["ts"])
+            logger.info(f"进度事件已发送: {project_id} - {stage} ({percent}%) - {message}")
+        except Exception as e:
+            logger.error(f"发送进度事件失败: {e}")
+    _mirror_studio(project_id, stage, percent, message, approximate=not measured)
+
+
+def note_activity(project_id: str, message: str) -> None:
+    """Refresh an existing snapshot while a model stream is still producing.
+
+    A measured sub-percent stays put. Without one, the percent eases forward
+    inside the stage band and never jumps backward. No snapshot means this
+    call is outside the pipeline and nothing is created.
+    """
+    if not project_id or not message or not store:
         return
-    
     try:
-        store.save(project_id, stage, percent, message, payload["ts"])
-        logger.info(f"Progress event emitted: {project_id} - {stage} ({percent}%) - {message}")
-    except Exception as e:
-        logger.error(f"Failed to emit progress event: {e}")
+        current = store.get(project_id)
+    except Exception:  # noqa: BLE001 - progress must not fail the model call
+        return
+    if not current:
+        return
+    existing = current.get("message") or ""
+    if "失败" in existing or "错误" in existing:
+        return
+    stage = current.get("stage") or ""
+    percent = int(current.get("percent") or 0)
+    shown = percent
+    # A measured sub-percent (download, transcription) stays put. A long model
+    # call eases toward the band ceiling and never moves backward.
+    if stage and stage != "DONE" and not _measured.get(project_id):
+        now = time.time()
+        anchor = _ease_anchor.get(project_id)
+        if not anchor or anchor[0] != stage:
+            anchor = (stage, percent, now)
+            _ease_anchor[project_id] = anchor
+        eased = ease_percent(stage, anchor[1], now - anchor[2])
+        shown = max(percent, eased)
+    payload = {
+        "project_id": project_id,
+        "stage": stage,
+        "percent": shown,
+        "message": message,
+        "ts": int(time.time()),
+    }
+    for fn in list(_listeners):
+        try:
+            fn(payload)
+        except Exception:  # noqa: BLE001
+            logger.debug("进度监听器异常", exc_info=True)
+    try:
+        store.save(project_id, payload["stage"], shown, message, payload["ts"])
+    except Exception:  # noqa: BLE001
+        logger.debug("刷新进度失败", exc_info=True)
+    _mirror_studio(project_id, stage, shown, message, approximate=not _measured.get(project_id, False))
 
 
 def get_progress_snapshot(project_id: str) -> Optional[Dict[str, Any]]:
     """
-    Get a project progress snapshot
+    获取项目进度快照
     
     Args:
-        project_id: Project ID
+        project_id: 项目ID
         
     Returns:
-        Progress snapshot data, or None if it does not exist
+        进度快照数据，如果不存在返回None
     """
     if not store:
         return None
@@ -285,55 +393,57 @@ def get_progress_snapshot(project_id: str) -> Optional[Dict[str, Any]]:
     try:
         return store.get(project_id)
     except Exception as e:
-        logger.error(f"Failed to get progress snapshot: {e}")
+        logger.error(f"获取进度快照失败: {e}")
         return None
 
 
 def get_multiple_progress_snapshots(project_ids: List[str]) -> List[Dict[str, Any]]:
     """
-    Batch get progress snapshots for multiple projects
+    批量获取多个项目的进度快照
     
     Args:
-        project_ids: List of project IDs
+        project_ids: 项目ID列表
         
     Returns:
-        List of progress snapshots
+        进度快照列表
     """
     if not store:
         return []
     try:
         return store.get_many(project_ids)
     except Exception as e:
-        logger.error(f"Failed to batch get progress snapshots: {e}")
+        logger.error(f"批量获取进度快照失败: {e}")
         return []
 
 
 def clear_progress(project_id: str):
     """
-    Clear project progress data
+    清除项目进度数据
     
     Args:
-        project_id: Project ID
+        project_id: 项目ID
     """
+    _ease_anchor.pop(project_id, None)
+    _measured.pop(project_id, None)
     if not store:
         return
     try:
         store.delete(project_id)
-        logger.info(f"Cleared project progress data: {project_id}")
+        logger.info(f"已清除项目进度数据: {project_id}")
     except Exception as e:
-        logger.error(f"Failed to clear progress data: {e}")
+        logger.error(f"清除进度数据失败: {e}")
 
 
-# Stage name mapping (for display)
+# 阶段名称映射（用于显示）
 STAGE_NAMES = {
-    "INGEST": "Material preparation",
-    "SUBTITLE": "Subtitle processing",
-    "ANALYZE": "Content analysis",
-    "HIGHLIGHT": "Clip localization",
-    "EXPORT": "Video export",
-    "DONE": "Processing complete"
+    "INGEST": "素材准备",
+    "SUBTITLE": "字幕处理", 
+    "ANALYZE": "内容分析",
+    "HIGHLIGHT": "片段定位",
+    "EXPORT": "视频导出",
+    "DONE": "处理完成"
 }
 
 def get_stage_display_name(stage: str) -> str:
-    """Get the display name of a stage"""
+    """获取阶段的显示名称"""
     return STAGE_NAMES.get(stage, stage)

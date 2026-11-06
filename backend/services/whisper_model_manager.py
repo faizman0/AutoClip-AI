@@ -1,16 +1,17 @@
 """
-Whisper model management service (faster-whisper)
+Whisper 模型管理服务（faster-whisper）
 
-Responsible for downloading, status checking, and deleting Systran/faster-whisper models. Models are pulled from HuggingFace
-and cached uniformly in `<data_dir>/whisper-models` (HF_HOME is set by whisper_runtime).
-Dependencies (huggingface_hub) come from the runtime installation directory; all related imports are deferred to inside functions.
+负责 Systran/faster-whisper 模型的下载、状态检查、删除。模型从 HuggingFace 拉取，
+统一缓存到 `<data_dir>/whisper-models`（由 whisper_runtime 设置 HF_HOME）。
+依赖（huggingface_hub）来自运行时安装目录，所有相关 import 都延迟到函数内。
 
-Download sources (AUTOCLIP_WHISPER_MODEL_SOURCE, RC156 Win QA #6):
-- auto (default): try huggingface.co first, and fall back to hf-mirror.com on failure (domestic networks often cannot reach the official source).
-- huggingface: use only the official source; hf-mirror: use only the mirror.
-If the user has set HF_ENDPOINT themselves, respect it and do not switch automatically. When using the mirror, hf_xet must be disabled:
-xet storage connects directly to cas-server.xethub.hf.co, bypassing HF_ENDPOINT (QA measured 401).
+下载源（AUTOCLIP_WHISPER_MODEL_SOURCE，RC156 Win QA #6）：
+- auto（默认）：先连 huggingface.co，失败再走 hf-mirror.com（国内网络常连不上官方）。
+- huggingface：只用官方源；hf-mirror：只用镜像。
+用户自己设置了 HF_ENDPOINT 时尊重它，不再自动切换。走镜像时必须关掉 hf_xet：
+xet 存储直连 cas-server.xethub.hf.co，不经过 HF_ENDPOINT（QA 实测 401）。
 """
+import errno
 import logging
 import os
 import threading
@@ -26,10 +27,10 @@ logger = logging.getLogger(__name__)
 
 
 def _silence_download_progress() -> None:
-    """Disable HuggingFace / tqdm progress bars.
+    """关掉 HuggingFace / tqdm 进度条。
 
-    PYTHON-FASTAPI-H / A: When desktop stdout is not a console, tqdm.status_printer
-    writing ``\\r`` throws OSError / BrokenPipeError, and the download is interrupted.
+    PYTHON-FASTAPI-H / A：桌面端 stdout 不是控制台时，tqdm.status_printer
+    写 ``\\r`` 会抛 OSError / BrokenPipeError，下载被中断。
     """
     os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
     os.environ.setdefault("TQDM_DISABLE", "1")
@@ -45,9 +46,51 @@ MIRROR_ENDPOINT = "https://hf-mirror.com"
 MODEL_SOURCES = ("auto", "huggingface", "hf-mirror")
 
 
-def model_source() -> str:
-    value = (os.environ.get("AUTOCLIP_WHISPER_MODEL_SOURCE") or "auto").strip().lower()
+PROBE_TIMEOUT = 3.0
+_SOURCE_FILE = "model_source.json"
+
+
+def _source_file() -> Path:
+    return whisper_runtime.get_models_dir() / _SOURCE_FILE
+
+
+def saved_model_source() -> str:
+    """The choice from 设置 → 默认模型 → 语音转字幕 → 模型下载源 (E3). Default auto."""
+    try:
+        import json
+        value = str(json.loads(_source_file().read_text(encoding="utf-8")).get("source", "auto")).lower()
+    except (OSError, ValueError, AttributeError):
+        return "auto"
     return value if value in MODEL_SOURCES else "auto"
+
+
+def save_model_source(source: str) -> str:
+    import json
+    value = (source or "").strip().lower()
+    if value not in MODEL_SOURCES:
+        raise ValueError(f"unsupported model source: {source}")
+    _source_file().write_text(json.dumps({"source": value}), encoding="utf-8")
+    return value
+
+
+def model_source() -> str:
+    """Env override (QA/CI) wins, then the saved setting."""
+    env = (os.environ.get("AUTOCLIP_WHISPER_MODEL_SOURCE") or "").strip().lower()
+    if env in MODEL_SOURCES:
+        return env
+    return saved_model_source()
+
+
+def _reachable(endpoint: str, timeout: float = PROBE_TIMEOUT) -> bool:
+    """Cheap HEAD probe so a blocked huggingface.co costs seconds, not a full download timeout."""
+    import urllib.request
+    try:
+        request = urllib.request.Request(endpoint.rstrip("/") + "/api/models?limit=1", method="HEAD")
+        with urllib.request.urlopen(request, timeout=timeout):
+            return True
+    except Exception as error:  # noqa: BLE001 - HTTPError still means the host answered
+        import urllib.error
+        return isinstance(error, urllib.error.HTTPError)
 
 
 def download_plan() -> List[tuple]:
@@ -60,6 +103,10 @@ def download_plan() -> List[tuple]:
     custom = (os.environ.get("HF_ENDPOINT") or "").strip().rstrip("/")
     if custom:
         return [("custom", custom)]
+    # auto: probe the official hub; when it is unreachable (typical in mainland China) start
+    # with hf-mirror and keep the official one as the fallback.
+    if not _reachable(OFFICIAL_ENDPOINT) and _reachable(MIRROR_ENDPOINT):
+        return [("hf-mirror", MIRROR_ENDPOINT), ("huggingface", OFFICIAL_ENDPOINT)]
     return [("huggingface", OFFICIAL_ENDPOINT), ("hf-mirror", MIRROR_ENDPOINT)]
 
 
@@ -78,16 +125,72 @@ def _disable_xet() -> None:
 
 
 def canonical_model_name(model_name: str) -> str:
-    # SpeechRecognitionConfig is compatible with the legacy `large` alias.
+    # SpeechRecognitionConfig 兼容旧配置的 large 别名。
     return "large-v3" if model_name == "large" else model_name
 
 
 class ModelStatus(str, Enum):
-    AVAILABLE = "available"      # Runtime ready, downloadable
-    DOWNLOADING = "downloading"  # Downloading
-    DOWNLOADED = "downloaded"    # Downloaded
-    ERROR = "error"              # Error (usually runtime not installed)
+    AVAILABLE = "available"      # 运行时就绪、可下载
+    DOWNLOADING = "downloading"  # 下载中
+    DOWNLOADED = "downloaded"    # 已下载
+    ERROR = "error"              # 错误（通常是运行时未安装）
     NOT_FOUND = "not_found"
+
+
+# stable reason code; the message below is also the zh i18n key (8 locales).
+WHISPER_DOWNLOAD_ERROR_CODE = "whisper_download_failed"
+# User-facing download failure status API must never echo raw exception text
+# (URLs, query tokens, auth). Full detail stays in logs only.
+WHISPER_DOWNLOAD_USER_ERROR = (
+    "Whisper 模型下载失败。请检查网络后到「设置 → 默认模型 → 语音转字幕」重新下载，"
+    "或在下载源中改用 hf-mirror 镜像。"
+)
+# Sentry tag for a download that has reached the error state. The UI keeps
+# WHISPER_DOWNLOAD_ERROR_CODE; these four never carry a message, URL or path.
+DOWNLOAD_FAILURE_CODES = ("network", "disk", "corrupt", "unexpected")
+_DISK_ERRNOS = {errno.ENOSPC, errno.EACCES, errno.EROFS}
+_NETWORK_NAMES = {
+    "ConnectionError", "ConnectTimeout", "ReadTimeout", "Timeout", "TimeoutException",
+    "ConnectError", "ReadError", "WriteError", "WriteTimeout", "PoolTimeout",
+    "NetworkError", "ProxyError", "SSLError", "ProtocolError", "RemoteProtocolError",
+    "ChunkedEncodingError",
+}
+_NETWORK_MODULES = ("requests", "httpx", "httpcore", "urllib3")
+
+
+class ModelDownloadFailed(RuntimeError):
+    """Final Whisper download failure. Telemetry keeps `code` and nothing else."""
+
+    def __init__(self, code: str):
+        if code not in DOWNLOAD_FAILURE_CODES:
+            code = "unexpected"
+        super().__init__(code)
+        self.code = code
+
+
+def _is_network_error(error: BaseException) -> bool:
+    if isinstance(error, (TimeoutError, ConnectionError)):
+        return True
+    return type(error).__module__.startswith(_NETWORK_MODULES) and type(error).__name__ in _NETWORK_NAMES
+
+
+def download_failure_code(error: BaseException) -> str:
+    """network (a connection error or timeout, including an HF error caused by one), disk, corrupt, or unexpected.
+
+    Walks ``__cause__`` only. A source that failed over to the next mirror is not a final failure.
+    """
+    seen: set[int] = set()
+    current: Optional[BaseException] = error
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(current, ModelDownloadFailed):
+            return current.code
+        if isinstance(current, OSError) and current.errno in _DISK_ERRNOS:
+            return "disk"
+        if _is_network_error(current):
+            return "network"
+        current = current.__cause__
+    return "unexpected"
 
 
 @dataclass
@@ -103,35 +206,36 @@ class ModelInfo:
     download_progress: Optional[int] = None
     local_path: Optional[str] = None
     error_message: Optional[str] = None
-    source: Optional[str] = None  # The source actually used for download: huggingface / hf-mirror / custom
+    error_code: Optional[str] = None
+    source: Optional[str] = None  # 实际下载用的源：huggingface / hf-mirror / custom
 
 
-# Model name -> HuggingFace repo + display info (faster-whisper / CTranslate2 models)
+# 模型名 -> HuggingFace 仓库 + 展示信息（faster-whisper / CTranslate2 模型）
 _MODELS = {
     "tiny": {
         "repo_id": "Systran/faster-whisper-tiny",
         "size": "~75 MB", "size_bytes": 75 * 1024 * 1024,
-        "description": "Fastest, lower accuracy, suitable for quick previews", "accuracy": "Low", "speed": "Fastest",
+        "description": "最快，准确度较低，适合快速预览", "accuracy": "较低", "speed": "最快",
     },
     "base": {
         "repo_id": "Systran/faster-whisper-base",
         "size": "~145 MB", "size_bytes": 145 * 1024 * 1024,
-        "description": "A balanced choice, recommended for daily use", "accuracy": "Medium", "speed": "Fast",
+        "description": "平衡之选，推荐日常使用", "accuracy": "中等", "speed": "快",
     },
     "small": {
         "repo_id": "Systran/faster-whisper-small",
         "size": "~488 MB", "size_bytes": 488 * 1024 * 1024,
-        "description": "Good accuracy, suitable for important content", "accuracy": "Good", "speed": "Medium",
+        "description": "较好准确度，适合重要内容", "accuracy": "较好", "speed": "中等",
     },
     "medium": {
         "repo_id": "Systran/faster-whisper-medium",
         "size": "~1.5 GB", "size_bytes": 1500 * 1024 * 1024,
-        "description": "High accuracy, suitable for professional use", "accuracy": "High", "speed": "Slower",
+        "description": "高准确度，适合专业用途", "accuracy": "高", "speed": "较慢",
     },
     "large-v3": {
         "repo_id": "Systran/faster-whisper-large-v3",
         "size": "~3 GB", "size_bytes": 3000 * 1024 * 1024,
-        "description": "Highest accuracy", "accuracy": "Highest", "speed": "Slowest",
+        "description": "最高准确度", "accuracy": "最高", "speed": "最慢",
     },
 }
 
@@ -142,7 +246,7 @@ def repo_id_for(model_name: str) -> Optional[str]:
 
 
 def _snapshot_is_complete(snapshot: Path) -> bool:
-    """HF creates the snapshot before the weights finish downloading; the directory existing does not mean offline transcription is possible."""
+    """HF 会在权重下载完成前创建 snapshot；目录存在不代表可以离线转写。"""
     try:
         required = [snapshot / name for name in ("model.bin", "config.json", "tokenizer.json")]
         vocabulary = list(snapshot.glob("vocabulary.*"))
@@ -154,6 +258,176 @@ def _snapshot_is_complete(snapshot: Path) -> bool:
         return False
 
 
+@dataclass(frozen=True)
+class _BrokenFile:
+    name: str
+    etag: Optional[str]
+    size: Optional[int]
+
+
+def _safe_cache_name(name: object) -> Optional[str]:
+    if not isinstance(name, str) or name in {"", ".", ".."}:
+        return None
+    if any(char in name for char in ("/", "\\", "\x00")):
+        return None
+    return name
+
+
+def _lfs_sha256(info: object) -> Optional[str]:
+    lfs = info.get("lfs") if isinstance(info, dict) else getattr(info, "lfs", None)
+    sha = lfs.get("sha256") if isinstance(lfs, dict) else getattr(lfs, "sha256", None)
+    return _safe_cache_name(sha)
+
+
+def _info_size(info: object) -> Optional[int]:
+    size = info.get("size") if isinstance(info, dict) else getattr(info, "size", None)
+    return size if isinstance(size, int) else None
+
+
+def _info_path(info: object) -> Optional[str]:
+    path = info.get("path") if isinstance(info, dict) else getattr(info, "path", None)
+    return path if isinstance(path, str) else None
+
+
+def _symlink_etag(path: Path) -> Optional[str]:
+    if not path.is_symlink():
+        return None
+    return _safe_cache_name(Path(os.readlink(path)).name)
+
+
+def _broken_files(snapshot: Path, repo_id: str, endpoint: str) -> Optional[List[_BrokenFile]]:
+    """Snapshot files whose size — or, for a symlink, blob name — disagrees with the repo.
+
+    None means the metadata could not be read. That still counts as consistent (a mirror
+    without the API must not block a download) and is logged once per lookup. Called only
+    after a download, never from the readiness poll.
+    """
+    try:
+        if not snapshot.is_dir():
+            return []
+        names = sorted(path.name for path in snapshot.iterdir() if path.is_file() or path.is_symlink())
+        if not names:
+            return []
+        from huggingface_hub import HfApi
+        infos = HfApi(endpoint=endpoint).get_paths_info(repo_id, names, revision=snapshot.name)
+    except Exception as error:  # noqa: BLE001 - no metadata must not block a download that used to work
+        logger.warning(
+            "Whisper 模型 %s 的仓库文件信息暂时读不到（%s），按本地文件是否非空判断",
+            repo_id, type(error).__name__,
+        )
+        return None
+    by_name = {path: info for info in infos if (path := _info_path(info))}
+    broken: List[_BrokenFile] = []
+    for name in names:
+        info = by_name.get(name)
+        expected = _info_size(info) if info is not None else None
+        if expected is None:
+            continue
+        path = snapshot / name
+        etag = _lfs_sha256(info) or _symlink_etag(path)
+        try:
+            size = path.stat().st_size
+        except OSError:
+            broken.append(_BrokenFile(name, etag, expected))
+            continue
+        if size != expected:
+            broken.append(_BrokenFile(name, etag, expected))
+            continue
+        linked = _symlink_etag(path)
+        sha = _lfs_sha256(info)
+        if linked and sha and linked != sha:
+            broken.append(_BrokenFile(name, sha, expected))
+    return broken
+
+
+def _zero_byte_files(snapshot: Path) -> List[_BrokenFile]:
+    """Empty required files, used when repo metadata is unavailable (the non-empty check still applies)."""
+    found: List[_BrokenFile] = []
+    if not snapshot.is_dir():
+        return found
+    paths = [snapshot / name for name in ("model.bin", "config.json", "tokenizer.json")]
+    paths.extend(snapshot.glob("vocabulary.*"))
+    for path in paths:
+        try:
+            empty = (path.is_file() or path.is_symlink()) and path.stat().st_size == 0
+        except OSError:
+            empty = True
+        if empty and (path.is_file() or path.is_symlink()):
+            found.append(_BrokenFile(path.name, _symlink_etag(path), None))
+    return found
+
+
+def _blobs_dir(snapshot: Path) -> Path:
+    # hub/models--org--name/snapshots/<rev>  →  hub/models--org--name/blobs
+    return snapshot.parent.parent / "blobs"
+
+
+def _blob_inside(path: Path, blobs: Path) -> Optional[Path]:
+    try:
+        target = path.resolve()
+        target.relative_to(blobs.resolve())
+    except (OSError, ValueError):
+        return None
+    return target if target.is_file() else None
+
+
+def _unlink(path: Path, label: str) -> None:
+    try:
+        path.unlink(missing_ok=True)
+    except OSError:
+        logger.warning("Whisper 模型的坏缓存文件没能删掉（%s）", label)
+
+
+def _delete_broken(snapshot: Path, items: List[_BrokenFile]) -> None:
+    """Remove bad snapshot entries so a normal snapshot_download can write them.
+
+    HuggingFace creates a snapshot path only when it is missing, and on a copy layout
+    (Windows without developer mode) it reuses a blob that already exists. A truncated
+    blob is removed; a blob whose size already matches the repo is kept and copied back.
+    force_download is not used: it rewrites the blob and still leaves the existing copy.
+    """
+    blobs = _blobs_dir(snapshot)
+    for item in items:
+        name = _safe_cache_name(item.name)
+        if name is None:
+            continue
+        path = snapshot / name
+        if path.is_symlink():
+            target = _blob_inside(path, blobs)
+            _unlink(path, name)
+            if target is not None:
+                _unlink(target, name)
+        elif path.exists():
+            _unlink(path, name)
+        etag = _safe_cache_name(item.etag)
+        if etag and item.size is not None:
+            blob = blobs / etag
+            try:
+                short = blob.is_file() and not blob.is_symlink() and blob.stat().st_size != item.size
+            except OSError:
+                short = True
+            if short:
+                _unlink(blob, name)
+        if etag:
+            _unlink(blobs / f"{etag}.incomplete", name)
+
+
+def _fetch_snapshot(snapshot_download, args: dict, repo_id: str, endpoint: str) -> str:
+    """One normal download, then at most one more after the bad files have been deleted."""
+    snapshot = Path(snapshot_download(**args))
+    broken = _broken_files(snapshot, repo_id, endpoint)
+    if _snapshot_is_complete(snapshot) and not broken:
+        return str(snapshot)
+    targets = broken or _zero_byte_files(snapshot)
+    if targets:
+        _delete_broken(snapshot, targets)
+    repaired = Path(snapshot_download(**args))
+    broken_after = _broken_files(repaired, repo_id, endpoint)
+    if not _snapshot_is_complete(repaired) or broken_after:
+        raise ModelDownloadFailed("corrupt")
+    return str(repaired)
+
+
 class WhisperModelManager:
     def __init__(self):
         self.model_configs = _MODELS
@@ -161,10 +435,10 @@ class WhisperModelManager:
         self._download_state: Dict[str, Dict] = {}
         self._lock = threading.Lock()
 
-    # ---- Paths / status ----
+    # ---- 路径 / 状态 ----
     def _model_cache_dir(self, model_name: str) -> Path:
         repo = self.model_configs[model_name]["repo_id"]
-        # HF cache directory naming: models--<org>--<name>
+        # HF 缓存目录命名：models--<org>--<name>
         return whisper_runtime.get_models_dir() / "hub" / ("models--" + repo.replace("/", "--"))
 
     def get_local_model_path(self, model_name: str) -> Optional[Path]:
@@ -178,7 +452,7 @@ class WhisperModelManager:
             ref = d / "refs" / "main"
             if ref.is_file():
                 revision = ref.read_text(encoding="utf-8").strip()
-                # Only select a snapshot within the current cache; do not use arbitrary paths.
+                # 只选当前缓存内的 snapshot，不使用任意路径。
                 candidates.sort(key=lambda path: path.name != revision)
             return next((path for path in candidates if _snapshot_is_complete(path)), None)
         except OSError:
@@ -197,7 +471,7 @@ class WhisperModelManager:
         if self._is_downloaded(model_name):
             return ModelStatus.DOWNLOADED
         if not whisper_runtime.is_installed():
-            return ModelStatus.ERROR  # Runtime not installed, so the model is unusable too
+            return ModelStatus.ERROR  # 运行时没装，模型也用不了
         return ModelStatus.AVAILABLE
 
     def _info(self, model_name: str) -> ModelInfo:
@@ -213,6 +487,7 @@ class WhisperModelManager:
             download_progress=st.get("progress"),
             local_path=str(self._model_cache_dir(model_name)) if status == ModelStatus.DOWNLOADED else None,
             error_message=st.get("error"),
+            error_code=st.get("error_code"),
             source=st.get("source"),
         )
 
@@ -224,16 +499,16 @@ class WhisperModelManager:
             return None
         return self._info(model_name)
 
-    # ---- Download (background thread, non-blocking) ----
+    # ---- 下载（后台线程，非阻塞）----
     async def download_model(self, model_name: str) -> str:
         """Start a background download. Returns "installed" or "downloading", never "done".
 
         The download finishes (or fails) later: callers poll get_model_info (RC156 Win QA #5).
         """
         if model_name not in self.model_configs:
-            raise ValueError(f"Unsupported model: {model_name}")
+            raise ValueError(f"不支持的模型: {model_name}")
         if not whisper_runtime.is_installed():
-            raise RuntimeError("Please install the Whisper runtime first")
+            raise RuntimeError("请先安装 Whisper 运行时")
         if self._is_downloaded(model_name):
             # A complete resumed cache must recover a previous download error
             # immediately, without requiring an application restart.
@@ -263,7 +538,7 @@ class WhisperModelManager:
         """
         model_name = canonical_model_name(model_name)
         if model_name not in self.model_configs:
-            raise ValueError(f"Unsupported model: {model_name}")
+            raise ValueError(f"不支持的模型: {model_name}")
         local = self.get_local_model_path(model_name)
         if local is not None:
             return local
@@ -285,7 +560,7 @@ class WhisperModelManager:
         if local is None:
             with self._lock:
                 error = (self._download_state.get(model_name) or {}).get("error")
-            raise RuntimeError(error or f"Whisper model {model_name} download incomplete")
+            raise RuntimeError(error or f"Whisper 模型 {model_name} 下载未完成")
         return local
 
     def _download_blocking(self, model_name: str) -> None:
@@ -299,39 +574,41 @@ class WhisperModelManager:
             for index, (source, endpoint) in enumerate(plan):
                 if endpoint != OFFICIAL_ENDPOINT:
                     _disable_xet()
-                logger.info("Starting download of Whisper model %s (%s, source %s)", model_name, repo_id, source)
+                logger.info("开始下载 Whisper 模型 %s (%s, 源 %s)", model_name, repo_id, source)
                 try:
-                    snapshot = snapshot_download(
-                        repo_id=repo_id,
-                        cache_dir=str(whisper_runtime.get_models_dir() / "hub"),
-                        endpoint=endpoint,
-                    )
-                    if not _snapshot_is_complete(Path(snapshot)):
-                        raise RuntimeError("Whisper model files are incomplete. Please re-download the model and try again.")
+                    args = dict(repo_id=repo_id, cache_dir=str(whisper_runtime.get_models_dir() / "hub"), endpoint=endpoint)
+                    # A bad snapshot file is deleted and fetched again with a normal download.
+                    # force_download only refreshes the blob and leaves a copy-layout file in place.
+                    _fetch_snapshot(snapshot_download, args, repo_id, endpoint)
                 except Exception as e:  # noqa: BLE001
                     failures.append(f"{source}: {type(e).__name__}: {e}")
                     if index + 1 < len(plan):
-                        logger.warning("Whisper model %s failed to download from %s (%s), switching to %s",
+                        logger.warning("Whisper 模型 %s 从 %s 下载失败（%s），改用 %s",
                                        model_name, source, type(e).__name__, plan[index + 1][0])
                         continue
                     if len(failures) > 1:
-                        raise RuntimeError("; ".join(failures)) from e
+                        raise RuntimeError("；".join(failures)) from e
                     raise
                 with self._lock:
                     self._download_state[model_name] = {
                         "status": "downloaded", "progress": 100, "error": None, "source": source,
                     }
-                logger.info("Whisper model %s download complete (source %s)", model_name, source)
+                logger.info("Whisper 模型 %s 下载完成（源 %s）", model_name, source)
                 return
         except Exception as e:  # noqa: BLE001
-            # Handled failures are logged only as warning: LoggingIntegration(event_level=ERROR) + exc_info
-            # would send recoverable errors like tqdm writing to the console to Sentry.
+            # 换源过程中的失败只 warning。状态变成 error 时上报一次，事件里只有错误码。
+            # warning 而不是 error：LoggingIntegration(event_level=ERROR) 会把可恢复错误打进 Sentry。
             logger.warning(
-                "Failed to download Whisper model %s: %s: %s",
+                "下载 Whisper 模型 %s 失败: %s: %s",
                 model_name, type(e).__name__, e,
             )
+            from backend.core import sentry_setup
+            sentry_setup.capture_studio_exception(ModelDownloadFailed(download_failure_code(e)), phase="model_download")
             with self._lock:
-                self._download_state[model_name] = {"status": "error", "progress": 0, "error": str(e)}
+                self._download_state[model_name] = {
+                    "status": "error", "progress": 0, "error": WHISPER_DOWNLOAD_USER_ERROR,
+                    "error_code": WHISPER_DOWNLOAD_ERROR_CODE,
+                }
 
     def download_status(self, model_name: str) -> Optional[str]:
         """In-process download state only ("downloading" / "downloaded" / "error"); no disk or network."""
@@ -346,7 +623,7 @@ class WhisperModelManager:
         return st.get("progress")
 
     def cancel_download(self, model_name: str) -> bool:
-        # snapshot_download is not easy to interrupt; this only clears the state, and downloaded shards are kept for resuming
+        # snapshot_download 不易中断；这里只清状态，已下载分片保留可续传
         with self._lock:
             if model_name in self._download_state and self._download_state[model_name].get("status") == "downloading":
                 self._download_state[model_name] = {"status": "available", "progress": 0, "error": None}
@@ -363,10 +640,10 @@ class WhisperModelManager:
                 shutil.rmtree(d, ignore_errors=True)
             with self._lock:
                 self._download_state.pop(model_name, None)
-            logger.info(f"Whisper model {model_name} deleted")
+            logger.info(f"Whisper 模型 {model_name} 已删除")
             return True
         except Exception as e:  # noqa: BLE001
-            logger.error(f"Failed to delete Whisper model {model_name}: {e}")
+            logger.error(f"删除 Whisper 模型 {model_name} 失败: {e}")
             return False
 
 

@@ -219,8 +219,6 @@ SUBTITLE_STYLES: Dict[str, str] = {
     "box": "Fontsize=17,Bold=0,PrimaryColour=&H00FFFFFF,BackColour=&H88000000,OutlineColour=&H88000000,BorderStyle=3,Outline=6,Shadow=0,MarginV=52,Alignment=2",
     # Bold yellow with a dark outline, the classic short-video caption.
     "accent": "Fontsize=20,Bold=1,PrimaryColour=&H0000E5FF,OutlineColour=&H00000000,BorderStyle=1,Outline=3,Shadow=0,MarginV=56,Alignment=2",
-    # EZ Clip: clean modern sans-serif with subtle cyan accent for keywords.
-    "ez_clip": "Fontsize=18,Bold=1,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Shadow=0,MarginV=50,Alignment=2",
 }
 
 

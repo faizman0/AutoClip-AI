@@ -1,20 +1,20 @@
-"""Advanced packaging components (desktop mode, installed on demand).
+"""高级包装组件（桌面模式，按需安装）。
 
-Magazine-style / street templates use Playwright to capture HTML overlays. Podcast templates are not in this version. The desktop installer does not include this runtime by default
-(the Python package is about 40 MB, plus roughly 100 MB for headless Chromium). When it is not installed properly, the final video falls back to classic (ASS),
-so output is never blocked.
+杂志风 / 街头模板要用 Playwright 抓 HTML 叠加层。播客模板不在这一版。桌面安装包默认不带这份运行时
+（Python 包约 40 MB，无头 Chromium 再加大约 100 MB）。没装好时成片走 classic（ASS），
+出片不被挡住。
 
-The installation location follows the same convention as Whisper / person recognition:
+安装位置和 Whisper / 人物识别同一套约定：
 
-- Install into the user-writable directory `<data_dir>/packaging-runtime`, not into the .app (to avoid read-only issues and breaking code signing).
-- Use the current backend's Python (`sys.executable`) to run `pip install --target`.
-- Put the browser binary under that directory in `browsers/`, and set `PLAYWRIGHT_BROWSERS_PATH`.
-- The pip source follows `AUTOCLIP_PIP_INDEX` (default `auto`): try the official PyPI first, and after a silent timeout switch to the Tsinghua mirror.
-  `pypi` uses only the official source, `mirror` uses only the mirror. If `PIP_INDEX_URL` is already set, respect it and do not switch automatically.
-- Browser downloads follow `AUTOCLIP_PLAYWRIGHT_DOWNLOAD_SOURCE` (default `auto`): try the official CDN first, and after a timeout switch to
-  npmmirror. If `PLAYWRIGHT_DOWNLOAD_HOST` or `AUTOCLIP_PLAYWRIGHT_DOWNLOAD_HOST` pins the address, do not switch.
-  If Chrome or Edge already exists on the system, use `channel='chrome'/'msedge'` instead of downloading
-  chromium-headless-shell, and do not access the download mirror. On Windows, prefer Edge; on other systems, prefer Chrome.
+- 装到用户可写目录 `<data_dir>/packaging-runtime`，不写进 .app（避免只读和破坏签名）。
+- 用当前后端的 Python（`sys.executable`）做 `pip install --target`。
+- 浏览器二进制放在该目录下的 `browsers/`，并设置 `PLAYWRIGHT_BROWSERS_PATH`。
+- pip 源看 `AUTOCLIP_PIP_INDEX`（默认 `auto`）：先连官方 PyPI，静默超时再改清华镜像。
+  `pypi` 只用官方，`mirror` 只用镜像。已经设置 `PIP_INDEX_URL` 时尊重它，不再自动切换。
+- 浏览器下载看 `AUTOCLIP_PLAYWRIGHT_DOWNLOAD_SOURCE`（默认 `auto`）：先官方 CDN，超时再改
+  npmmirror。`PLAYWRIGHT_DOWNLOAD_HOST` 或 `AUTOCLIP_PLAYWRIGHT_DOWNLOAD_HOST` 钉死地址时
+  不再切换。系统里已有 Chrome 或 Edge 就用 `channel='chrome'/'msedge'`，不再下载
+  chromium-headless-shell，也不会访问下载镜像。Windows 优先 Edge，其他系统优先 Chrome。
 """
 from __future__ import annotations
 
@@ -37,15 +37,15 @@ logger = logging.getLogger(__name__)
 PACKAGES = ["playwright>=1.49,<2"]
 IMPORT_NAME = "playwright"
 BROWSER_PACKAGE = "chromium-headless-shell"
-# The download root documented by Playwright. npmmirror provides the same set of builds at `<host>/<revision>/<browser>`.
+# Playwright 文档里的下载根。npmmirror 按 `<host>/<revision>/<browser>` 提供同一套构建。
 CN_DOWNLOAD_HOST = "https://npmmirror.com/mirrors/playwright"
 OFFICIAL_PIP_INDEX = "https://pypi.org/simple"
-# The default pip source for desktop build scripts. Used as a fallback when machines in mainland China cannot reach pypi.org.
+# 桌面构建脚本的默认 pip 源。大陆机器连不上 pypi.org 时用它做回退。
 CN_PIP_INDEX = "https://pypi.tuna.tsinghua.edu.cn/simple"
 PIP_INDEX_MODES = ("auto", "pypi", "mirror")
 PLAYWRIGHT_DOWNLOAD_MODES = ("auto", "official", "mirror")
-# Routes from mainland China to the official source can blackhole. pip's own retries can spin for over ten minutes with no output.
-# Switch to the mirror as soon as the official source goes silent; leave the mirror enough time for the actual download.
+# 大陆到官方源的路由会黑洞。pip 自己的重试可以空转十几分钟且没有任何输出。
+# 官方源一旦静默就改走镜像；镜像侧留出真正下载的时间。
 PIP_OFFICIAL_STALL_SECONDS = 40
 PIP_OFFICIAL_TIMEOUT_SECONDS = 90
 PIP_MIRROR_STALL_SECONDS = 120
@@ -59,7 +59,7 @@ PIP_RETRIES = "1"
 TIMEOUT_EXIT = 124
 HTML_TEMPLATES = frozenset(_HTML_TEMPLATE_IDS)
 CLASSIC = "classic"
-# Older layouts are still ASS; do not mistake them for HTML templates when reading them.
+# 旧版式仍然是 ASS，读到它们时不要误当成 HTML 模板。
 _CLASSIC_ALIASES = frozenset({"", CLASSIC, "interview_zh", "podcast_en", "landscape", "none", "auto"})
 _SHELL_PREFIXES = ("chromium_headless_shell-", "chromium-")
 _SHELL_BINARIES = {
@@ -86,7 +86,7 @@ def _data_dir() -> Path:
 
 
 def install_root() -> Path:
-    """Installation directory. Do not create it during probing, to avoid turning status polling into a write when the data directory is read-only."""
+    """安装目录。探测时不创建，避免只读数据目录把状态轮询变成一次写入。"""
     return _data_dir() / "packaging-runtime"
 
 
@@ -121,9 +121,9 @@ def _write_install_error(message: str) -> None:
     try:
         path = _error_path()
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text((message or "Installation failed")[:500], encoding="utf-8")
+        path.write_text((message or "安装失败")[:500], encoding="utf-8")
     except Exception as exc:  # noqa: BLE001
-        logger.warning("Failed to record the reason for packaging component installation failure: %s", type(exc).__name__)
+        logger.warning("记录包装组件安装失败原因失败: %s", type(exc).__name__)
 
 
 def _clear_install_error() -> None:
@@ -147,10 +147,10 @@ def pip_index_mode() -> str:
 
 
 def pip_index_plan(explicit: str | None = None) -> list[tuple[str, str]]:
-    """[(label, index url)], in order of attempts.
+    """[(label, index url)]，按尝试顺序。
 
-    Same shape as Whisper's download plan: explicit mode takes priority; if the user has set PIP_INDEX_URL, use only that;
-    for auto, try the official index first, then the Tsinghua mirror.
+    和 Whisper 的下载计划同一形状：显式模式优先；用户设置了 PIP_INDEX_URL 时只用它；
+    auto 先官方索引，再清华镜像。
     """
     if explicit and explicit.strip():
         return [("custom", explicit.strip())]
@@ -182,7 +182,7 @@ def playwright_download_mode() -> str:
 
 
 def browser_download_plan() -> list[tuple[str, str | None]]:
-    """[(label, PLAYWRIGHT_DOWNLOAD_HOST)]. The official CDN host is None."""
+    """[(label, PLAYWRIGHT_DOWNLOAD_HOST)]。官方 CDN 的 host 是 None。"""
     explicit = (os.getenv("PLAYWRIGHT_DOWNLOAD_HOST") or "").strip()
     override = (os.getenv("AUTOCLIP_PLAYWRIGHT_DOWNLOAD_HOST") or "").strip()
     pinned = explicit or override
@@ -197,7 +197,7 @@ def browser_download_plan() -> list[tuple[str, str | None]]:
 
 
 def download_host() -> str | None:
-    """The pinned browser download root. auto tries each one in turn; this returns None to avoid writing the mirror before the official source has been tried."""
+    """钉死的浏览器下载根。auto 会逐个尝试，这里返回 None，避免还没试官方源就写上镜像。"""
     plan = browser_download_plan()
     if len(plan) == 1:
         return plan[0][1]
@@ -205,7 +205,7 @@ def download_host() -> str | None:
 
 
 def ensure_environment() -> dict[str, Any]:
-    """Consolidate the browser cache and domestic mirrors into the data directory. Call once before frame capture."""
+    """把浏览器缓存和国内镜像收口到数据目录。抓帧前调用一次即可。"""
     browsers = get_browsers_dir()
     os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(browsers)
     host = download_host()
@@ -222,7 +222,7 @@ def ensure_on_path() -> None:
 
 
 def bundled_package_present() -> bool:
-    """Since 1.5.7, the desktop installer bundles the playwright Python package (without browsers, W157-F7)."""
+    """1.5.7 起桌面安装包自带 playwright Python 包（不带浏览器，W157-F7）。"""
     try:
         import importlib.util
         spec = importlib.util.find_spec(IMPORT_NAME)
@@ -248,9 +248,9 @@ def _playwright_importable() -> bool:
     except Exception as exc:
         missing = isinstance(exc, ModuleNotFoundError) and exc.name == IMPORT_NAME
         if not missing and not _runtime_import_error:
-            logger.warning("Packaging runtime import failed: %s", type(exc).__name__)
+            logger.warning("包装运行时导入失败: %s", type(exc).__name__)
         _runtime_import_error = "" if missing else (
-            "Failed to load packaging runtime dependencies. Please reinstall the advanced packaging components and restart AutoClip."
+            "包装运行时依赖加载失败。请重新安装高级包装组件后重启 AutoClip。"
         )
         return False
     _runtime_import_error = ""
@@ -264,14 +264,14 @@ def _running_as_root() -> bool:
 
 def chromium_args() -> list[str]:
     args = ["--disable-dev-shm-usage", "--disable-extensions"]
-    # If it must run as root in a container, the Chromium sandbox will refuse to start. Keep the sandbox for normal desktop users.
+    # 容器里若必须以 root 跑，Chromium 沙箱会直接拒绝启动。普通桌面用户保持沙箱。
     if _running_as_root():
         args.append("--no-sandbox")
     return args
 
 
 def _channel_order(platform: str) -> list[str]:
-    # Windows desktop always has Edge; Chrome is more common on macOS / Linux.
+    # Windows 桌面一定有 Edge；macOS / Linux 上 Chrome 更常见。
     if platform == "win32":
         return ["msedge", "chrome"]
     return ["chrome", "msedge"]
@@ -304,7 +304,7 @@ def find_system_browser(
     exists: Callable[[Path], bool] | None = None,
     which: Callable[[str], str | None] | None = None,
 ) -> dict[str, str] | None:
-    """System Chrome / Edge. If found, there is no need to download chromium-headless-shell."""
+    """系统 Chrome / Edge。找到就不必下载 chromium-headless-shell。"""
     system = platform or sys.platform
     exists = exists or (lambda path: path.is_file())
     which = which or shutil.which
@@ -373,19 +373,19 @@ def browser_plan() -> dict[str, Any]:
 
 
 def launch_kwargs() -> dict[str, Any]:
-    """Arguments for `playwright.chromium.launch`. Prefer the system browser."""
+    """给 `playwright.chromium.launch` 的参数。系统浏览器优先。"""
     plan = browser_plan()
     kwargs: dict[str, Any] = {"headless": True, "args": chromium_args()}
     if plan["mode"] == "channel" and plan.get("channel"):
         kwargs["channel"] = plan["channel"]
-        # On Mac, Chrome may be installed in ~/Applications; channel only recognizes the default location, so pass the detected path as well.
+        # Mac 上 Chrome 可能装在 ~/Applications；channel 只认默认位置，所以把探测到的路径一起传。
         if plan.get("executable"):
             kwargs["executable_path"] = plan["executable"]
     return kwargs
 
 
 def missing_browser() -> bool:
-    """playwright is available but there is no Chrome / Edge on this machine (and no downloaded headless shell)."""
+    """playwright 可用但本机没有 Chrome / Edge（也没有下载过的 headless shell）。"""
     try:
         if not package_present() or not _playwright_importable():
             return False
@@ -394,12 +394,12 @@ def missing_browser() -> bool:
         return False
 
 
-NO_BROWSER_WARNING = "Chrome or Edge browser not found. Magazine-style/street styles have been switched to the classic style. Install Google Chrome and re-export to use them."
-NO_RUNTIME_WARNING = "Advanced packaging components are unavailable. Magazine-style/street styles have been switched to the classic style."
+NO_BROWSER_WARNING = "未找到 Chrome 或 Edge 浏览器，杂志风/街头样式已改用经典样式。安装 Google Chrome 后重新导出即可。"
+NO_RUNTIME_WARNING = "高级包装组件不可用，杂志风/街头样式已改用经典样式。"
 
 
 def downgrade_warning(reason: str | None) -> str | None:
-    """The message shown to the user when downgrading due to missing_runtime (the frontend translates the Chinese key into 8 languages)."""
+    """missing_runtime 降级时给用户看的提示（前端按中文键翻译成 8 种语言）。"""
     if reason != "missing_runtime":
         return None
     return NO_BROWSER_WARNING if missing_browser() else NO_RUNTIME_WARNING
@@ -412,20 +412,20 @@ def is_installed() -> bool:
 
 
 def effective_template(requested: str | None) -> str:
-    """Fall back to classic when the component is not ready. Any probing failure falls back to classic and does not throw an exception to the output."""
+    """组件没就绪时改走 classic。任何探测失败都退回 classic，不把异常抛给出片。"""
     name = (requested or "").strip().lower()
     if name in _CLASSIC_ALIASES or name not in HTML_TEMPLATES:
         return CLASSIC
     try:
         ready = is_installed()
     except Exception:
-        logger.exception("Packaging runtime status probing failed, switching to classic")
+        logger.exception("包装运行时状态探测失败，改用 classic")
         return CLASSIC
     return name if ready else CLASSIC
 
 
 def blocks_output() -> bool:
-    """Advanced packaging is optional. Missing components only downgrade the template and do not block output."""
+    """高级包装是可选的。缺组件只降级模板，不阻断出片。"""
     return False
 
 
@@ -435,7 +435,7 @@ def _set_state(**kwargs: Any) -> None:
 
 
 def _public_failure(message: str) -> str:
-    # The settings page polling will receive message. Raw exception text often contains local paths, so only write them to the log.
+    # 设置页轮询会拿到 message。异常原文里常有本机路径，只写进日志。
     return message
 
 
@@ -446,10 +446,10 @@ def get_status() -> dict[str, Any]:
         try:
             ready = is_installed()
         except Exception:
-            logger.exception("Packaging runtime status probing failed")
+            logger.exception("包装运行时状态探测失败")
             ready = False
             status["status"] = "error"
-            status["message"] = _public_failure("Failed to read packaging component status. Please reinstall the advanced packaging components.")
+            status["message"] = _public_failure("包装组件状态读取失败。请重新安装高级包装组件。")
         if ready:
             status["status"] = "installed"
             status["progress"] = 100
@@ -465,13 +465,13 @@ def get_status() -> dict[str, Any]:
     try:
         plan = browser_plan()
     except Exception:
-        logger.exception("Packaging browser probing failed")
+        logger.exception("包装浏览器探测失败")
         plan = {"ready": False, "mode": BROWSER_PACKAGE, "channel": None, "executable": None, "needs_download": True}
     host = None
     try:
         host = download_host()
     except Exception:
-        logger.exception("Packaging download mirror probing failed")
+        logger.exception("包装下载镜像探测失败")
     status["platform_supported"] = True
     status["packages"] = list(PACKAGES)
     status["browser_package"] = BROWSER_PACKAGE
@@ -500,7 +500,7 @@ def _child_env() -> dict[str, str]:
 def pip_command(index_url: str | None) -> list[str]:
     command = [
         sys.executable, "-m", "pip", "install", "--upgrade", "--disable-pip-version-check",
-        # Socket timeouts cannot stop blackholed DNS / TCP. The process-level silent timeout in _stream is the backstop.
+        # 套接字超时挡不住被黑洞的 DNS / TCP。进程级静默超时在 _stream 里兜底。
         "--timeout", PIP_SOCKET_TIMEOUT, "--retries", PIP_RETRIES,
         "--target", str(get_install_dir()), *PACKAGES,
     ]
@@ -562,12 +562,12 @@ def _stream(
     timeout: float | None = None,
     stall_timeout: float | None = None,
 ) -> int:
-    # It must stop even if no timeout is passed. On mainland China networks, a pip run with no output can spin for over ten minutes.
+    # 没传超时也要停。大陆网络上一次没有输出的 pip 可以空转到十几分钟。
     if timeout is None:
         timeout = PIP_MIRROR_TIMEOUT_SECONDS
     if stall_timeout is None:
         stall_timeout = PIP_MIRROR_STALL_SECONDS
-    logger.info("Packaging component: %s", " ".join(command))
+    logger.info("包装组件: %s", " ".join(command))
     proc = subprocess.Popen(
         command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         text=True, encoding="utf-8", errors="replace", bufsize=1, env=env,
@@ -580,7 +580,7 @@ def _stream(
             for line in iter(proc.stdout.readline, ""):
                 lines_out.put(line)
         except Exception:
-            logger.debug("Packaging component output read interrupted", exc_info=True)
+            logger.debug("包装组件输出读取中断", exc_info=True)
         finally:
             lines_out.put(None)
 
@@ -597,13 +597,13 @@ def _stream(
             waits.append(last_output + stall_timeout - now)
         wait = min(waits) if waits else None
         if wait is not None and wait <= 0:
-            logger.warning("Packaging component command silent timeout, terminated")
+            logger.warning("包装组件命令静默超时，已终止")
             _stop_process(proc)
             return TIMEOUT_EXIT
         try:
             item = lines_out.get(timeout=wait)
         except queue.Empty:
-            logger.warning("Packaging component command silent timeout, terminated")
+            logger.warning("包装组件命令静默超时，已终止")
             _stop_process(proc)
             return TIMEOUT_EXIT
         if item is None:
@@ -638,12 +638,12 @@ def _run_plan(
             command = pip_command(value if isinstance(value, str) else None)
             attempt_env = env
         if index and failures:
-            logger.warning("Packaging component %s failed from %s (%s), switching to %s", kind, plan[index - 1][0], failures[-1], label)
-            _set_state(message="Official source unresponsive, switching to domestic mirror…")
+            logger.warning("包装组件 %s 从 %s 失败（%s），改用 %s", kind, plan[index - 1][0], failures[-1], label)
+            _set_state(message="官方源无响应，改用国内镜像…")
         code = _stream(command, attempt_env, progress, timeout=hard, stall_timeout=stall)
         if code == 0:
             return 0, failures
-        reason = "timeout" if code == TIMEOUT_EXIT else f"exit code {code}"
+        reason = "超时" if code == TIMEOUT_EXIT else f"退出码 {code}"
         failures.append(f"{label}: {reason}")
     return code, failures
 
@@ -652,15 +652,15 @@ def _failure_message(kind: str, code: int, failures: list[str]) -> str:
     timed_out = code == TIMEOUT_EXIT
     if len(failures) > 1:
         if kind == "browser":
-            return "Browser download failed (official source unresponsive, domestic mirror also failed)"
-        return "Installation failed (official PyPI unresponsive, domestic mirror also failed)"
+            return "浏览器下载失败（官方源无响应，国内镜像也失败）"
+        return "安装失败（官方 PyPI 无响应，国内镜像也失败）"
     if kind == "browser":
-        return "Browser download failed (timeout)" if timed_out else f"Browser download failed (exit code {code})"
-    return "Installation failed (pip timeout)" if timed_out else f"Installation failed (pip exit code {code})"
+        return "浏览器下载失败（超时）" if timed_out else f"浏览器下载失败（退出码 {code}）"
+    return "安装失败（pip 超时）" if timed_out else f"安装失败（pip 退出码 {code}）"
 
 
 def _do_install(index_url: str | None) -> None:
-    _set_state(status="installing", progress=5, message="Preparing advanced packaging components…", log_tail="")
+    _set_state(status="installing", progress=5, message="正在准备高级包装组件…", log_tail="")
     try:
         env = _child_env()
         if not package_present() or not _playwright_importable():
@@ -669,29 +669,29 @@ def _do_install(index_url: str | None) -> None:
                 message = _public_failure(_failure_message("pip", code, failures))
                 _write_install_error(message)
                 _set_state(status="error", message=message)
-                logger.error("Packaging component pip installation failed: %s", "; ".join(failures) or code)
+                logger.error("包装组件 pip 安装失败: %s", "; ".join(failures) or code)
                 return
         plan = browser_plan()
         if plan["needs_download"]:
-            _set_state(progress=65, message="Downloading headless browser…")
+            _set_state(progress=65, message="正在下载无头浏览器…")
             code, failures = _run_plan("browser", browser_download_plan(), env, (65, 95))
             if code != 0:
                 message = _public_failure(_failure_message("browser", code, failures))
                 _write_install_error(message)
                 _set_state(status="error", message=message)
-                logger.error("chromium-headless-shell installation failed: %s", "; ".join(failures) or code)
+                logger.error("chromium-headless-shell 安装失败: %s", "; ".join(failures) or code)
                 return
         if is_installed():
             _clear_install_error()
-            _set_state(status="installed", progress=100, message="Installation complete")
-            logger.info("Advanced packaging component installation complete, browser mode %s", browser_plan()["mode"])
+            _set_state(status="installed", progress=100, message="安装完成")
+            logger.info("高级包装组件安装完成，浏览器模式 %s", browser_plan()["mode"])
         else:
-            message = _public_failure("Installation finished, but the packaging component is still unavailable")
+            message = _public_failure("安装结束，但包装组件仍不可用")
             _write_install_error(message)
             _set_state(status="error", message=message)
     except Exception as exc:  # noqa: BLE001
-        logger.error("Exception installing advanced packaging component: %s", exc, exc_info=True)
-        message = _public_failure("Installation exception. Please try again later, or continue using the classic template for output.")
+        logger.error("安装高级包装组件异常: %s", exc, exc_info=True)
+        message = _public_failure("安装异常。请稍后重试，或继续使用经典模板出片。")
         _write_install_error(message)
         _set_state(status="error", message=message)
 
@@ -699,20 +699,20 @@ def _do_install(index_url: str | None) -> None:
 def start_install(index_url: str | None = None) -> dict[str, Any]:
     with _state_lock:
         if _state["status"] == "installing":
-            return {"started": False, "message": "Installation in progress"}
-        _state.update(status="installing", progress=0, message="Checking runtime…", log_tail="")
+            return {"started": False, "message": "正在安装中"}
+        _state.update(status="installing", progress=0, message="正在检查运行时…", log_tail="")
     if is_installed():
-        _set_state(status="installed", progress=100, message="Installed")
-        return {"started": False, "message": "Installed"}
-    # None is passed to pip_index_plan: auto tries official first then mirror; PIP_INDEX_URL uses only the user-specified source.
+        _set_state(status="installed", progress=100, message="已安装")
+        return {"started": False, "message": "已安装"}
+    # None 交给 pip_index_plan：auto 先官方再镜像，PIP_INDEX_URL 则只用用户指定的源。
     threading.Thread(target=_do_install, args=(index_url,), name="packaging-install", daemon=True).start()
-    return {"started": True, "message": "Installation started"}
+    return {"started": True, "message": "已开始安装"}
 
 
 def install_blocking(index_url: str | None = None) -> dict[str, Any]:
-    """Synchronous installation used by speed tests and repair scripts. The settings page uses `start_install`."""
+    """测速和修复脚本用的同步安装。设置页走 `start_install`。"""
     if is_installed():
-        _set_state(status="installed", progress=100, message="Installed")
+        _set_state(status="installed", progress=100, message="已安装")
         return get_status()
     _do_install(index_url)
     return get_status()
@@ -721,12 +721,12 @@ def install_blocking(index_url: str | None = None) -> dict[str, Any]:
 def uninstall() -> dict[str, Any]:
     with _state_lock:
         if _state["status"] == "installing":
-            return {"success": False, "message": "Installation in progress, cannot uninstall"}
+            return {"success": False, "message": "正在安装中，无法卸载"}
     root = install_root()
     try:
         shutil.rmtree(root, ignore_errors=True)
         if root.exists():
-            return {"success": False, "message": "Uninstall failed"}
+            return {"success": False, "message": "卸载失败"}
         removed = str(root)
         while removed in sys.path:
             sys.path.remove(removed)
@@ -735,8 +735,8 @@ def uninstall() -> dict[str, Any]:
         _clear_install_error()
         global _runtime_import_error
         _runtime_import_error = ""
-        _set_state(status="not_installed", progress=0, message="Uninstalled", log_tail="")
-        return {"success": True, "message": "Advanced packaging components uninstalled"}
+        _set_state(status="not_installed", progress=0, message="已卸载", log_tail="")
+        return {"success": True, "message": "已卸载高级包装组件"}
     except Exception as exc:  # noqa: BLE001
-        logger.error("Failed to uninstall advanced packaging components: %s", type(exc).__name__)
-        return {"success": False, "message": "Uninstall failed"}
+        logger.error("卸载高级包装组件失败: %s", type(exc).__name__)
+        return {"success": False, "message": "卸载失败"}
