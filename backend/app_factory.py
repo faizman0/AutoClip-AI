@@ -50,20 +50,20 @@ def create_app(mode: str = "web") -> FastAPI:
         ]
     )
     
-    # 创建 FastAPI 应用
+    # Create the FastAPI app
     app = FastAPI(
         title="AutoClip API",
-        description="AI视频切片处理API",
+        description="AI video clip processing API",
         version=__version__,
         docs_url="/docs",
         redoc_url="/redoc"
     )
     
-    # 设置应用状态
+    # Set application state
     app.state.mode = mode
     
-    # 来源守卫在内、CORS 在外：预检由 CORS 应答，其他网页的写请求由守卫拦下。
-    # 以前是 allow_origins=["*"] + allow_credentials，任意网页都能读设置里的 API Key。
+    # Origin guard on the inside, CORS on the outside: preflight is answered by CORS, and write requests from other web pages are blocked by the guard.
+    # It used to be allow_origins=["*"] + allow_credentials, so any web page could read the API Key in the settings.
     origins = allowed_origins()
     app.add_middleware(LocalOriginGuard, origins=origins, enforce_local_host=(mode == "desktop"))
     app.add_middleware(
@@ -74,118 +74,118 @@ def create_app(mode: str = "web") -> FastAPI:
         allow_headers=["*"],
     )
     
-    # 注册全局异常处理器
+    # Register the global exception handler
     app.add_exception_handler(Exception, global_exception_handler)
     
-    # 启动事件
+    # Startup event
     @app.on_event("startup")
     async def startup_event():
-        logger.info(f"启动 AutoClip API 服务 (模式: {mode})...")
+        logger.info(f"Starting AutoClip API service (mode: {mode})...")
         
-        # 导入所有模型以确保表被创建
+        # Import all models to ensure tables are created
         from backend.models.bilibili import BilibiliAccount, UploadRecord
         Base.metadata.create_all(bind=engine)
-        logger.info("数据库表创建完成")
+        logger.info("Database table creation complete")
         try:
             from backend.core.project_enum_migration import normalize_legacy_project_enums
             changed = normalize_legacy_project_enums(engine)
             if changed:
-                logger.info("已将 %s 条项目记录中的旧枚举值改写为当前版本可识别的值", changed)
+                logger.info("Rewrote legacy enum values in %s project records to values recognized by the current version", changed)
         except Exception:
-            logger.exception("清洗项目枚举旧值失败，列表读取会使用降级值")
+            logger.exception("Failed to clean up legacy project enum values; list reads will use degraded values")
         try:
-            # 上次进程被结束时还在跑的 Studio 任务不会再继续：标为失败并写明原因（RC156 #13）
+            # Studio tasks still running when the previous process was terminated will not continue: mark them as failed with the reason stated (RC156 #13)
             from backend.services.studio.restart_recovery import reconcile_interrupted_projects
             reconcile_interrupted_projects()
         except Exception:
-            logger.exception("Studio 重启恢复失败，打开项目时会再次尝试")
+            logger.exception("Studio restart recovery failed; it will be retried when the project is opened")
         try:
-            # 只清 projects 根下、库里没有对应行的残留目录；库读失败则什么都不删（RC156 PR4）
+            # Only clean up leftover directories under the projects root that have no corresponding row in the database; if reading the database fails, delete nothing (RC156 PR4)
             from backend.services.project_orphan_cleanup import cleanup_orphan_project_directories
             cleanup_orphan_project_directories()
         except Exception:
-            logger.exception("清理无数据库行的残留项目目录失败")
+            logger.exception("Failed to clean up leftover project directories with no database row")
         
-        # 加载 API 密钥到环境变量
+        # Load the API key into environment variables
         api_key = get_api_key()
         if api_key:
             os.environ["DASHSCOPE_API_KEY"] = api_key
-            logger.info("API 密钥已加载到环境变量")
+            logger.info("API key loaded into environment variables")
         else:
-            logger.warning("未找到 API 密钥配置")
+            logger.warning("No API key configuration found")
         
-        # 根据模式进行不同的初始化
+        # Perform different initialization depending on the mode
         if mode == "desktop":
-            logger.info("桌面模式：使用本地队列和 SQLite")
+            logger.info("Desktop mode: using local queue and SQLite")
         else:
-            logger.info("Web 模式：使用 Redis/Celery")
+            logger.info("Web mode: using Redis/Celery")
         
-        logger.info("WebSocket 网关服务已禁用，使用新的简化进度系统")
+        logger.info("WebSocket gateway service disabled; using the new simplified progress system")
     
-    # 关闭事件
+    # Shutdown event
     @app.on_event("shutdown")
     async def shutdown_event():
-        logger.info("正在关闭 AutoClip API 服务...")
+        logger.info("Shutting down AutoClip API service...")
         from backend.services import child_guard
         child_guard.kill_all()
-        logger.info("WebSocket 网关服务已禁用")
+        logger.info("WebSocket gateway service disabled")
     
-    # 注册Routes
+    # Register routes
     app.include_router(health_router, prefix="/api/health", tags=["health"])
     app.include_router(api_router, prefix="/api/v1")
     
-    # 添加 video-categories Routes（统一到 api_router 中）
+    # Add video-categories routes (unified into api_router)
     @app.get("/api/v1/video-categories")
     async def get_video_categories():
-        """获取视频分类配置."""
+        """Get video category configuration."""
         return {
             "categories": [
                 {
                     "value": "default",
-                    "name": "默认",
-                    "description": "通用视频内容处理",
+                    "name": "Default",
+                    "description": "General video content processing",
                     "icon": "🎬",
                     "color": "#4facfe"
                 },
                 {
                     "value": "knowledge",
-                    "name": "知识科普",
-                    "description": "科学、技术、历史、文化等知识类内容",
+                    "name": "Knowledge & Science",
+                    "description": "Knowledge content such as science, technology, history, and culture",
                     "icon": "📚",
                     "color": "#52c41a"
                 },
                 {
                     "value": "entertainment",
-                    "name": "娱乐",
-                    "description": "游戏、音乐、电影等娱乐内容",
+                    "name": "Entertainment",
+                    "description": "Entertainment content such as games, music, and movies",
                     "icon": "🎮",
                     "color": "#722ed1"
                 },
                 {
                     "value": "business",
-                    "name": "商业",
-                    "description": "商业、创业、投资等商业内容",
+                    "name": "Business",
+                    "description": "Business content such as business, startups, and investment",
                     "icon": "💼",
                     "color": "#fa8c16"
                 },
                 {
                     "value": "experience",
-                    "name": "经验分享",
-                    "description": "个人经历、生活感悟等经验内容",
+                    "name": "Experience Sharing",
+                    "description": "Experience content such as personal experiences and life reflections",
                     "icon": "🌟",
                     "color": "#eb2f96"
                 },
                 {
                     "value": "opinion",
-                    "name": "观点评论",
-                    "description": "时事评论、观点分析等评论内容",
+                    "name": "Opinion & Commentary",
+                    "description": "Commentary content such as current affairs commentary and opinion analysis",
                     "icon": "💭",
                     "color": "#13c2c2"
                 },
                 {
                     "value": "speech",
-                    "name": "演讲",
-                    "description": "公开演讲、讲座等演讲内容",
+                    "name": "Speech",
+                    "description": "Speech content such as public speeches and lectures",
                     "icon": "🎤",
                     "color": "#f5222d"
                 }
@@ -193,7 +193,7 @@ def create_app(mode: str = "web") -> FastAPI:
             "default_category": "default"
         }
     
-    # 根健康检查
+    # Root health check
     @app.get("/health")
     async def root_health():
         try:

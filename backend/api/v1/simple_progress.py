@@ -1,5 +1,5 @@
 """
-简化的进度API - 提供快照查询接口
+Simplified progress API - provides snapshot query endpoints
 """
 
 from fastapi import APIRouter, HTTPException, Query
@@ -14,66 +14,66 @@ router = APIRouter(prefix="/simple-progress", tags=["simple-progress"])
 
 
 @router.get("/snapshot")
-def get_progress_snapshots(project_ids: List[str] = Query(..., description="项目ID列表")):
+def get_progress_snapshots(project_ids: List[str] = Query(..., description="List of project IDs")):
     """
-    批量获取项目进度快照
+    Batch get project progress snapshots
     
     Args:
-        project_ids: 项目ID列表
+        project_ids: List of project IDs
         
     Returns:
-        进度快照列表
+        List of progress snapshots
     """
     try:
         if not project_ids:
             return []
             
         snapshots = get_multiple_progress_snapshots(project_ids)
-        logger.info(f"获取进度快照: {len(snapshots)} 个项目")
+        logger.info(f"Retrieved progress snapshots: {len(snapshots)} projects")
         return snapshots
         
     except Exception as e:
-        logger.error(f"获取进度快照失败: {e}")
-        raise HTTPException(status_code=500, detail=f"获取进度快照失败: {str(e)}")
+        logger.error(f"Failed to get progress snapshots: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get progress snapshots: {str(e)}")
 
 
 @router.get("/snapshot/{project_id}")
 def get_single_progress_snapshot(project_id: str):
     """
-    获取单个项目进度快照
+    Get a single project progress snapshot
     
     Args:
-        project_id: 项目ID
+        project_id: Project ID
         
     Returns:
-        进度快照数据
+        Progress snapshot data
     """
     try:
         snapshot = get_progress_snapshot(project_id)
         if snapshot is None:
-            # 返回默认状态
+            # Return default state
             return {
                 "project_id": project_id,
                 "stage": "INGEST",
                 "percent": 0,
-                "message": "等待开始",
+                "message": "Waiting to start",
                 "ts": 0
             }
             
         return snapshot
         
     except Exception as e:
-        logger.error(f"获取项目进度快照失败: {e}")
-        raise HTTPException(status_code=500, detail=f"获取项目进度快照失败: {str(e)}")
+        logger.error(f"Failed to get project progress snapshot: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get project progress snapshot: {str(e)}")
 
 
 @router.get("/stages")
 def get_available_stages():
     """
-    获取可用的处理阶段信息
+    Get available processing stage information
     
     Returns:
-        阶段配置信息
+        Stage configuration information
     """
     from backend.services.simple_progress import STAGES, STAGE_NAMES
     
