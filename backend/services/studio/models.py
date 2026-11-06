@@ -305,11 +305,11 @@ class OutputVariant(BaseModel):
     # Shadow quality report. Absent when the gate is off. Never changes the file.
     qa: QaReport | None = None
     # Set on the top three scored portrait clips when the import chose an HTML template.
-    html_template: Literal['editorial', 'street', 'news', 'cinema'] | None = None
+    html_template: Literal['editorial', 'street', 'news', 'cinema', 'classic', 'ez_clip'] | None = None
     # The other automatic portrait clips record why they stayed on classic.
     html_fallback: Literal['rank'] | None = None
     # The import choice, kept when this clip renders classic because it was not in the top three.
-    requested_template: Literal['editorial', 'street', 'news', 'cinema'] | None = None
+    requested_template: Literal['editorial', 'street', 'news', 'cinema', 'classic', 'ez_clip'] | None = None
 
 
 class SourceWindow(BaseModel):
