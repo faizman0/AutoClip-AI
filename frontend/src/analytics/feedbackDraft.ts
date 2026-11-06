@@ -1,3 +1,4 @@
+import { ERROR_CODE } from './failureCodes'
 /**
  * 应用内反馈的公开草稿。
  * 邮箱只留给维护者的收件记录，不进入 GitHub 的标题、正文或预填链接。
@@ -13,6 +14,7 @@ export interface FeedbackDraftInput {
   stage?: string
   errorMessage?: string
   errorCode?: string
+  unexpectedType?: string
   transcriptionProvider?: string
   transcriptionModel?: string
   version: string
@@ -31,6 +33,7 @@ export interface FeedbackDraft {
   stage?: string
   errorMessage?: string
   errorCode?: string
+  unexpectedType?: string
   transcriptionProvider?: string
   transcriptionModel?: string
   version: string
@@ -42,8 +45,6 @@ export interface FeedbackDraft {
 }
 
 const SECRET = /sk-[A-Za-z0-9_-]{8,}|ghp_[A-Za-z0-9]{8,}|github_pat_[A-Za-z0-9_]{8,}|xox[baprs]-[A-Za-z0-9-]+|(?:api[_-]?key|token|secret|password|bearer)\s*[:=]\s*\S+/gi
-
-const ERROR_CODE = /^(http_[45][0-9]{2}|network|timeout|unknown|validation|missing_resource|unexpected|connection|authentication|rate_limited|provider_error|invalid_response|output_truncated|refused|multiple|llm_not_configured|whisper_not_installed|whisper_install_failed|transcription_empty|subtitle_setup|timeline_empty|source_blocked|source_too_short|source_no_audio|source_unreadable|service_restarted)$/
 
 export function safeFeedbackErrorCode(value?: string): string | undefined {
   return value && ERROR_CODE.test(value) ? value : undefined
@@ -78,6 +79,7 @@ export function buildFeedbackDraft(input: FeedbackDraftInput): FeedbackDraft {
     stage: scrubText(input.stage, 80) || undefined,
     errorMessage: scrubText(input.errorMessage, 500) || undefined,
     errorCode: safeFeedbackErrorCode(input.errorCode),
+    unexpectedType: scrubText(input.unexpectedType, 40) || undefined,
     transcriptionProvider: ['whisper_local', 'sensevoice_local', 'cloud'].includes(input.transcriptionProvider || '') ? input.transcriptionProvider : undefined,
     transcriptionModel: scrubText(input.transcriptionModel, 80) || undefined,
     version: scrubText(input.version, 40),
@@ -90,8 +92,8 @@ export function buildFeedbackDraft(input: FeedbackDraftInput): FeedbackDraft {
 }
 
 /** 发给 PostHog 的字段。不含接口地址。邮箱只出现在这里。 */
-export function captureProperties(draft: FeedbackDraft): Record<string, string> {
-  const props: Record<string, string> = {
+export function captureProperties(draft: FeedbackDraft): Record<string, string | number> {
+  const props: Record<string, string | number> = {
     feedback_id: draft.feedbackId,
     category: draft.category,
     text: draft.text,
@@ -99,12 +101,16 @@ export function captureProperties(draft: FeedbackDraft): Record<string, string> 
     app_version: draft.version,
     os: draft.os,
     arch: draft.arch,
+    analytics_environment: 'production',
+    runtime: 'desktop',
+    schema_version: 2,
     $lib: 'autoclip-feedback',
   }
   if (draft.contact) props.contact = draft.contact
   if (draft.stage) props.stage = draft.stage
   if (draft.errorMessage) props.error_message = draft.errorMessage
   if (draft.errorCode) props.error_code = draft.errorCode
+  if (draft.unexpectedType) props.unexpected_type = draft.unexpectedType
   if (draft.transcriptionProvider) props.transcription_provider = draft.transcriptionProvider
   if (draft.transcriptionModel) props.transcription_model = draft.transcriptionModel
   if (draft.llmProvider) props.llm_provider = draft.llmProvider
@@ -132,6 +138,7 @@ function publicLines(draft: FeedbackDraft): string {
   ]
   if (draft.stage) lines.push(`阶段：${draft.stage}`)
   if (draft.errorCode) lines.push(`错误码：${draft.errorCode}`)
+  if (draft.unexpectedType) lines.push(`异常类型：${draft.unexpectedType}`)
   if (draft.transcriptionProvider) lines.push(`转写模型：${draft.transcriptionProvider}${draft.transcriptionModel ? ` / ${draft.transcriptionModel}` : ''}`)
   if (draft.llmProvider) lines.push(`模型：${draft.llmProvider}${draft.llmModel ? ` / ${draft.llmModel}` : ''}`)
   if (draft.errorMessage) lines.push('', '错误', draft.errorMessage)

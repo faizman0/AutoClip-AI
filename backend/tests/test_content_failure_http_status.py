@@ -19,9 +19,13 @@ from backend.models.project import Project, ProjectStatus
 SRT = "1\n00:00:00,000 --> 00:00:05,000\n第一句\n\n2\n00:00:05,000 --> 00:00:10,000\n第二句\n"
 
 
-class ProviderError(Exception):
+import openai
+
+
+class ProviderError(openai.APIStatusError):
+    # a status alone no longer means 'model'; a provider answer is an openai.APIError.
     def __init__(self, message, status_code):
-        super().__init__(message)
+        Exception.__init__(self, message)
         self.status_code = status_code
 
 
@@ -94,7 +98,10 @@ def test_http_500_reaches_the_generation_failure_context_through_apply_get(pipel
         jobs.run_content('p', video)
 
     assert raised.value.http_status == 500
-    assert studio_failure_context(raised.value, 'production') == {'failure_stage': 'analyze', 'http_status': 500, 'upstream_error_type': 'upstream_unavailable'}
+    ctx = studio_failure_context(raised.value, 'production')
+    # Known upstream attribution must not also stamp unexpected_type (A2 other≤1%).
+    assert ctx == {'failure_stage': 'analyze', 'http_status': 500, 'upstream_error_type': 'upstream_unavailable'}
+    assert 'unexpected_type' not in ctx
     assert 'private body' not in str(raised.value)
 
 
@@ -103,14 +110,14 @@ def test_coded_failure_keeps_code_stage_and_status(pipeline, monkeypatch):
     from backend.pipeline.failures import PipelineFailure
     from backend.services.studio import jobs
     mod, video = pipeline
-    failure = PipelineFailure('ANALYZE', '无法连接模型服务。', code='llm_connection')
+    failure = PipelineFailure('ANALYZE', '无法连接模型服务。', code='connection')
     failure.__cause__ = ProviderError('boom', 503)
     _outline_raises(mod, monkeypatch, failure)
 
     with pytest.raises(PipelineFailure) as raised:
         jobs.run_content('p', video)
 
-    assert (raised.value.stage, raised.value.code, raised.value.http_status) == ('ANALYZE', 'llm_connection', 503)
+    assert (raised.value.stage, raised.value.code, raised.value.http_status) == ('ANALYZE', 'connection', 503)
     assert studio_failure_context(raised.value, 'production')['http_status'] == 503
 
 
@@ -123,7 +130,9 @@ def test_unexpected_provider_error_keeps_its_status(pipeline, monkeypatch):
     with pytest.raises(RuntimeError) as raised:
         jobs.run_content('p', video)
 
-    assert studio_failure_context(raised.value, 'production') == {'failure_stage': 'production', 'http_status': 502, 'upstream_error_type': 'upstream_unavailable'}
+    ctx = studio_failure_context(raised.value, 'production')
+    assert ctx == {'failure_stage': 'production', 'http_status': 502, 'upstream_error_type': 'upstream_unavailable'}
+    assert 'unexpected_type' not in ctx
 
 
 def test_failure_without_status_and_out_of_range_values_add_nothing(pipeline, monkeypatch):
@@ -146,3 +155,48 @@ def test_failure_without_status_and_out_of_range_values_add_nothing(pipeline, mo
         with pytest.raises(PipelineFailure) as raised:
             jobs.run_content('p', video)
         assert raised.value.http_status is None, bad
+
+
+def test_r28_i450_a_status_on_a_non_provider_error_is_not_a_model_failure(pipeline, monkeypatch):
+    # only a request that was sent and answered is "model"; a bare status is not.
+    # apply().get() rebuilds ContentRunError (MRO → RuntimeError); no upstream/http on context,
+    # so 2A names it RuntimeError rather than dumping into unexpected_type=other.
+    from backend.core.sentry_setup import studio_failure_context
+    from backend.services.studio import jobs
+    mod, video = pipeline
+    bare = Exception('Error code: 502')
+    bare.status_code = 502
+    _outline_raises(mod, monkeypatch, bare)
+
+    with pytest.raises(RuntimeError) as raised:
+        jobs.run_content('p', video)
+
+    assert studio_failure_context(raised.value, 'production') == {
+        'failure_stage': 'production', 'unexpected_type': 'RuntimeError',
+    }
+    assert 'upstream_error_type' not in studio_failure_context(raised.value, 'production')
+    assert 'http_status' not in studio_failure_context(raised.value, 'production')
+
+
+def test_r28_i450_an_uncoded_wrapper_over_a_bare_status_is_not_a_model_failure(pipeline, monkeypatch):
+    # The PipelineFailure branch of the adapter: code='' wrapper over a non-provider error with a status.
+    from backend.core.sentry_setup import studio_failure_context
+    from backend.pipeline.failures import PipelineFailure
+    from backend.services.studio import jobs
+    mod, video = pipeline
+    bare = Exception('Error code: 500')
+    bare.status_code = 500
+    try:
+        try:
+            raise bare
+        except Exception as inner:
+            raise PipelineFailure('ANALYZE', '大纲提取失败', code='') from inner
+    except PipelineFailure as failure:
+        wrapped = failure
+    _outline_raises(mod, monkeypatch, wrapped)
+
+    with pytest.raises(PipelineFailure) as raised:
+        jobs.run_content('p', video)
+
+    assert raised.value.code != 'provider_error'
+    assert 'upstream_error_type' not in studio_failure_context(raised.value, 'production')

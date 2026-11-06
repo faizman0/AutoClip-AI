@@ -10,6 +10,7 @@ from backend.models.base import Base
 from backend.models.project import Project, ProjectStatus
 from backend.schemas.base import PaginationParams
 from backend.services.project_service import ProjectService
+from backend.core.failure_codes import sentence
 from backend.services.studio import store
 from backend.services.studio.restart_recovery import reconcile_interrupted_projects
 
@@ -58,7 +59,7 @@ def test_startup_closes_a_run_killed_during_the_llm_stage(sessions, stage):
     assert reconcile_interrupted_projects(sessions) == ['p']
     disk = _disk()
     assert disk['generation']['status'] == 'failed'
-    assert disk['generation']['error'] == store.RESTART_MESSAGE == '服务已重启，请重新生成'
+    assert disk['generation']['error'] == store.RESTART_MESSAGE == sentence('service_restarted')
     assert disk['generation']['error_code'] == 'service_restarted'
     assert disk['generation']['failure_stage'] == stage
     assert disk['analysis']['status'] == 'failed' and disk['analysis']['error'] == store.RESTART_MESSAGE
@@ -69,6 +70,38 @@ def test_startup_closes_a_run_killed_during_the_llm_stage(sessions, stage):
     assert row.error_message == store.RESTART_MESSAGE and row.error_code == 'service_restarted'
     # Idempotent: a second restart changes nothing.
     assert reconcile_interrupted_projects(sessions) == []
+
+
+@pytest.mark.parametrize('marker,reason', [
+    ('user_quit', 'user_quit'),
+    ('update', 'update'),
+    (None, 'crash'),
+    ('unacked', 'unknown'),
+    ('parent_lost', 'crash'),
+])
+def test_reconcile_writes_restart_reason(sessions, marker, reason):
+    from backend.services.studio import shutdown_marker
+    instance = 'ab' * 16
+    shutdown_marker._consumed.clear()
+    shutdown_marker._restart_cached.clear()
+    if marker == 'unacked':
+        root = shutdown_marker._root()
+        root.mkdir(parents=True, exist_ok=True)
+        (root / instance).write_text('unacked', encoding='ascii')
+    elif marker:
+        assert shutdown_marker.mark(marker, instance)
+    _project(sessions, _production(instance=instance, stage='production'))
+    assert reconcile_interrupted_projects(sessions) == ['p']
+    generation = _disk()['generation']
+    assert generation['error_code'] == 'service_restarted'
+    assert generation['failure_stage'] == 'production'
+    assert generation['restart_reason'] == reason
+
+
+def test_reconcile_unknown_instance_keeps_restart_reason_unknown(sessions):
+    _project(sessions, _production(instance='previous-process', stage='screening'))
+    assert reconcile_interrupted_projects(sessions) == ['p']
+    assert _disk()['generation']['restart_reason'] == 'unknown'
 
 
 def test_previous_release_shape_completed_with_zero_clips_is_failed(sessions):
@@ -96,6 +129,43 @@ def test_run_owned_by_this_process_is_left_running(sessions):
     assert _row(sessions).status.value == 'processing'
 
 
+def test_idle_producer_stays_in_production_until_the_process_exits(sessions):
+    """A live, idle producer (~0% CPU, blocked in sleep) is not service_restarted.
+
+    Killing that process is what closes the run. This is the desktop-backend
+    distinction the health loop also uses: exit relaunches, an alive process does not.
+    """
+    import subprocess
+    import sys
+
+    import psutil
+
+    proc = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'])
+    try:
+        owner = psutil.Process(proc.pid)
+        data = _production()
+        data['generation']['producer'] = {'pid': proc.pid, 'created_at': owner.create_time()}
+        _project(sessions, data)
+        assert owner.is_running()
+        assert reconcile_interrupted_projects(sessions) == []
+        disk = _disk()
+        assert disk['generation']['status'] == 'production'
+        assert disk['analysis']['status'] == 'running'
+        assert disk['analysis']['message'] == '正在制作可发布成片'
+        assert _row(sessions).status.value == 'processing'
+    finally:
+        proc.kill()
+        proc.wait(timeout=5)
+    assert reconcile_interrupted_projects(sessions) == ['p']
+    disk = _disk()
+    assert disk['generation']['status'] == 'failed'
+    assert disk['generation']['error_code'] == 'service_restarted'
+    assert disk['generation']['error'] == store.RESTART_MESSAGE
+    assert 'message' not in disk['analysis']
+    row = _row(sessions)
+    assert row.status.value == 'failed' and row.error_code == 'service_restarted'
+
+
 def test_live_cli_producer_is_not_failed_by_the_desktop(sessions):
     import psutil
     data = _production()
@@ -112,6 +182,26 @@ def test_dead_cli_producer_is_recovered(sessions):
     _project(sessions, data)
     assert reconcile_interrupted_projects(sessions) == ['p']
     assert _row(sessions).status.value == 'failed'
+
+
+def test_recover_uses_the_catalog_sentence_for_every_interrupted_piece(sessions):
+    catalog = sentence('service_restarted')
+    _project(sessions, {
+        'generation': {'status': 'rendering', 'auto_start': True},
+        'analysis': {'status': 'running', 'phase': 'rendering', 'run_id': 'r', 'instance': OLD},
+        'drafts': [{'id': 'd1'}, {'id': 'd2'}],
+        'jobs': [{'job_id': 'j1', 'status': 'running', 'instance': OLD}],
+        'output_variants': [
+            {'id': 'v1', 'render_job_id': 'j1', 'status': 'running', 'instance': OLD},
+            {'id': 'v2', 'status': 'completed', 'cover_job': {'status': 'running', 'instance': OLD}},
+        ]})
+    assert reconcile_interrupted_projects(sessions) == ['p']
+    disk = _disk()
+    assert disk['jobs'][0]['error'] == catalog
+    assert disk['output_variants'][0]['error'] == catalog
+    assert disk['output_variants'][1]['cover_job']['error'] == catalog
+    assert disk['generation']['error'] == catalog
+    assert _row(sessions).error_message == catalog
 
 
 def test_killed_during_render_has_a_reason_on_the_project(sessions):
@@ -236,10 +326,10 @@ def test_manual_confirmation_run_is_failed_and_keeps_its_wording(sessions):
     _project(sessions, data, auto=False)
     assert reconcile_interrupted_projects(sessions) == ['p']
     disk = _disk()
-    assert disk['analysis']['status'] == 'failed' and disk['analysis']['error'] == '服务已重启，请重试分析'
+    assert disk['analysis']['status'] == 'failed' and disk['analysis']['error'] == store.RESTART_MESSAGE == sentence('service_restarted')
     assert disk['analysis']['error_code'] == 'service_restarted' and 'message' not in disk['analysis']
     row = _row(sessions)
-    assert row.status.value == 'failed' and row.error_message == '服务已重启，请重试分析'
+    assert row.status.value == 'failed' and row.error_message == sentence('service_restarted')
 
 
 def test_one_unreadable_project_does_not_stop_the_others(sessions):
@@ -278,3 +368,127 @@ def test_long_video_stuck_in_processing_across_restarts_is_failed(sessions):
     assert disk['analysis']['error'] == store.RESTART_MESSAGE and 'message' not in disk['analysis']
     # Home card reads studio_generation_status=failed → 「重新生成」 entry.
     assert (row.settings or {}).get('studio_generation_status') == 'failed'
+
+
+# --- 1.5.9 A1-2 ---------------------------------------------------------------------------------
+
+def test_a1_2_crash_fields_from_heartbeat_exit_and_fault(tmp_path, monkeypatch):
+    import json
+    monkeypatch.setenv('AUTOCLIP_SHUTDOWN_MARKER_DIR', str(tmp_path))
+    monkeypatch.setenv('AUTOCLIP_DATA_DIR', str(tmp_path / 'data'))
+    from backend.services.studio import shutdown_marker as sm, run_heartbeat
+    sm._consumed.clear(); sm._restart_cached.clear()
+    sm._crash_exit_cached.clear(); sm._crash_scene_cached.clear()
+    instance = 'b' * 32
+    (tmp_path / instance).write_text('exit:137', encoding='ascii')
+    hb = {
+        'ts': 1, 'uptime_s': 120, 'rss_mb': 1500, 'free_disk_mb': 8000,
+        'stage': 'render', 'ffmpeg_children': 1,
+    }
+    (tmp_path / f'{instance}.hb').write_text(json.dumps(hb), encoding='utf-8')
+    (tmp_path / f'{instance}.fault').write_text(
+        'Fatal Python error: Segmentation fault\nFile "/Users/x/app/backend/services/studio/jobs.py", line 10 in _tracked\n',
+        encoding='utf-8',
+    )
+    fields = sm.crash_fields(instance)
+    assert fields['crash_exit'] == 'oom'
+    assert fields['crash_stage'] == 'render'
+    assert fields['crash_uptime_bucket'] in sm.CRASH_UPTIME_BUCKETS
+    assert fields['crash_rss_bucket'] in sm.CRASH_RSS_BUCKETS
+    assert fields['crash_disk_bucket'] in sm.CRASH_DISK_BUCKETS
+    assert fields['crash_has_fault'] is True
+    # Missing sidecars → unknown, no throw
+    instance2 = 'c' * 32
+    (tmp_path / instance2).write_text('exit:1', encoding='ascii')
+    sm._consumed.clear(); sm._restart_cached.clear()
+    sm._crash_exit_cached.clear(); sm._crash_scene_cached.clear()
+    sparse = sm.crash_fields(instance2)
+    assert sparse['crash_exit'] == 'nonzero_other'
+    assert sparse['crash_stage'] == 'unknown'
+    assert sparse['crash_has_fault'] is False
+
+
+# --- 1.5.9 N4 ------------------------------------------------------------------------------------
+
+def _fake_sentry(monkeypatch):
+    """Enable real capture_crash_recovery with a fake SDK so once-per-instance dedupe holds."""
+    from backend.core import sentry_setup as ss
+    captured = []
+    monkeypatch.setattr(ss, '_initialized', True)
+    monkeypatch.setattr(ss, 'crash_reports_enabled', lambda: True)
+    ss._crash_reported.clear()
+
+    class Scope:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def set_tag(self, *a, **k): pass
+        fingerprint = None
+
+    class FakeSentry:
+        @staticmethod
+        def new_scope():
+            return Scope()
+        @staticmethod
+        def capture_event(payload):
+            captured.append(payload)
+            return f'evt-{len(captured)}'
+
+    import sys
+    monkeypatch.setitem(sys.modules, 'sentry_sdk', FakeSentry)
+    return captured
+
+
+def test_n4_manual_confirmation_crash_reports_sentry_once(sessions, monkeypatch):
+    """Manual (awaiting_confirmation) recover stamps analysis only — must still report Sentry."""
+    from backend.services.studio import shutdown_marker
+    captured = _fake_sentry(monkeypatch)
+    instance = 'd' * 32
+    shutdown_marker._consumed.clear(); shutdown_marker._restart_cached.clear()
+    shutdown_marker._crash_exit_cached.clear(); shutdown_marker._crash_scene_cached.clear()
+    data = _production(instance=instance)
+    data['generation'] = {'status': 'awaiting_confirmation', 'auto_start': False}
+    _project(sessions, data, auto=False)
+    assert reconcile_interrupted_projects(sessions) == ['p']
+    assert len(captured) == 1
+    assert captured[0]['fingerprint'][:2] == ['studio', 'service_restarted']
+    assert captured[0]['tags']['restart_reason'] == 'crash'
+    # Idempotent: second reconcile must not re-fire.
+    assert reconcile_interrupted_projects(sessions) == []
+    assert len(captured) == 1
+
+
+def test_n4_home_list_heal_reports_crash_via_recover(sessions, monkeypatch):
+    """List-first heal calls store.recover without relying on reconcile's Sentry loop."""
+    from backend.services.studio import shutdown_marker
+    captured = _fake_sentry(monkeypatch)
+    instance = 'e' * 32
+    shutdown_marker._consumed.clear(); shutdown_marker._restart_cached.clear()
+    shutdown_marker._crash_exit_cached.clear(); shutdown_marker._crash_scene_cached.clear()
+    _project(sessions, _production(instance=instance))
+    with sessions() as db:
+        listing = ProjectService(db).get_projects_paginated(PaginationParams())
+    assert listing.items[0].status.value == 'failed'
+    assert len(captured) == 1
+    assert captured[0]['tags']['restart_reason'] == 'crash'
+    assert captured[0]['fingerprint'][:2] == ['studio', 'service_restarted']
+
+
+# --- 1.5.9 N1 nested stage stack ---------------------------------------------------------------
+
+def test_n1_nested_set_stage_stack_keeps_outer_production():
+    """Nested render finishing must not report idle while outer production is still active."""
+    from backend.services.studio import run_heartbeat
+
+    run_heartbeat.set_stage('idle')  # clear any prior stack on this thread
+    # Drain leftover frames if a previous test left the thread dirty.
+    while run_heartbeat.current_stage() != 'idle':
+        run_heartbeat.set_stage('idle')
+
+    run_heartbeat.set_stage('analyze')  # outer production
+    assert run_heartbeat.current_stage() == 'analyze'
+    run_heartbeat.set_stage('render')  # nested
+    assert run_heartbeat.current_stage() == 'render'
+    run_heartbeat.set_stage('idle')  # nested done — outer must remain
+    assert run_heartbeat.current_stage() == 'analyze'
+    run_heartbeat.set_stage('idle')  # outer done
+    assert run_heartbeat.current_stage() == 'idle'
