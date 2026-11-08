@@ -79,6 +79,8 @@ data/temp/
 data/output/
 data/backups/
 data/cache/
+data/whisper-models/
+data/
 backend/data/
 
 # 前端依赖与构建产物
