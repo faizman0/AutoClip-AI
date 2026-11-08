@@ -170,10 +170,8 @@ def _chunks(words, max_words=3, max_chars=18):
 def _nameplate(scene: _Scene, at: float, name: str, role: str, y: int) -> None:
     end = at + NAMEPLATE_SEC
     slide = lambda row, delay: f'{{\\an7\\move(-640,{row},72,{row},{delay},{delay + 300})\\fad(0,260)}}'
-    scene.add(5, at, end, 'PlateBar', f'{{\\an7\\move(-640,{y - 14},56,{y - 14},0,300)\\fad(0,260)\\p1}}m 0 0 l 8 0 8 {118 if role else 70} 0 {118 if role else 70}{{\\p0}}', carry=False)
+    scene.add(5, at, end, 'PlateBar', f'{{\\an7\\move(-640,{y - 14},56,{y - 14},0,300)\\fad(0,260)\\p1}}m 0 0 l 8 0 8 70 0 70{{\\p0}}', carry=False)
     scene.add(5, at, end, 'PlateName', slide(y, 0) + _esc(name), carry=False)
-    if role:
-        scene.add(5, at, end, 'PlateRole', slide(y + 66, 80) + _esc(role), carry=False)
 
 
 def scene_ass(packaging: Packaging, scenes: list[Scene], index: int, word_timing: dict | None = None, *, titles_only: bool = False) -> str:

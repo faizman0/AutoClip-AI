@@ -614,7 +614,7 @@ def _validated(result, lines, base, translate, burned, known_names, draft, avoid
             continue  # a nameplate the audience cannot read is worse than none
         role = str(item.get('role') or '').strip()[:60]
         seen.add(name.lower())
-        speakers.append({'at': lines[index]['start'], 'name': name, 'role': '' if foreign_for(audience, role) else role})
+        speakers.append({'at': lines[index]['start'], 'name': name, 'role': ''})
     if not speakers:
         # The model often leaves speakers empty even when the public title names the guest.
         # Street's nameplate is that name. It is not the cover title, and it is not a guess.
