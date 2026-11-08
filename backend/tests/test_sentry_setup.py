@@ -157,15 +157,16 @@ def test_studio_failure_context_keeps_stage_and_http_status_without_messages():
         'failure_stage': 'vision', 'http_status': 429, 'upstream_error_type': 'rate_limited'}
 
     timeout = sentry_setup.studio_failure_context(TimeoutError('private'), 'render')
-    assert timeout == {'failure_stage': 'render'}
+    assert timeout == {'failure_stage': 'render', 'unexpected_type': 'TimeoutError'}
     assert 'private' not in json.dumps(timeout)
 
 
-class _ProviderStatusError(Exception):
-    """Mimics openai.APIStatusError: the HTTP status lives on `status_code`."""
+class _ProviderStatusError(__import__("openai").APIStatusError):
+    """A provider answer (openai.APIStatusError): the HTTP status lives on `status_code`."""
+    # a status alone no longer means 'model'; a provider answer is an openai.APIError.
 
     def __init__(self, message, status_code):
-        super().__init__(message)
+        Exception.__init__(self, message)
         self.status_code = status_code
 
 
@@ -187,18 +188,22 @@ def test_studio_failure_context_reads_http_status_from_wrapped_provider_error():
     assert context == {'failure_stage': 'analyze', 'http_status': 500, 'upstream_error_type': 'upstream_unavailable'}
     assert 'private' not in json.dumps(context)
 
-    # Two levels deep (provider error re-wrapped by a client layer), explicit and implicit chaining.
-    def client_layer():
+    # Two levels deep (provider error re-wrapped by a client layer): explicit chaining is followed.
+    # an implicit __context__ is not this failure's cause and is never walked.
+    def client_layer(explicit):
         try:
             raise _ProviderStatusError('private body', 502)
-        except _ProviderStatusError:
+        except _ProviderStatusError as provider:
+            if explicit:
+                raise RuntimeError('client wrapper') from provider
             raise RuntimeError('client wrapper')  # implicit __context__
-    try:
-        client_layer()
-    except RuntimeError as inner:
-        failure = wrapped(inner)
-    assert sentry_setup.studio_failure_context(failure, 'production') == {
-        'failure_stage': 'analyze', 'http_status': 502, 'upstream_error_type': 'upstream_unavailable'}
+    for explicit, expected in ((True, {'failure_stage': 'analyze', 'http_status': 502, 'upstream_error_type': 'upstream_unavailable'}),
+                               (False, {'failure_stage': 'analyze'})):
+        try:
+            client_layer(explicit)
+        except RuntimeError as inner:
+            failure = wrapped(inner)
+        assert sentry_setup.studio_failure_context(failure, 'production') == expected, explicit
 
     # The nearest valid status wins; non-HTTP and out-of-range values are ignored.
     outer = _ProviderStatusError('proxy', 503)
@@ -237,7 +242,7 @@ def test_studio_failure_context_without_status_in_chain_and_with_cycles():
     # A cyclic chain must terminate.
     a, b = RuntimeError('a'), RuntimeError('b')
     a.__cause__, b.__cause__ = b, a
-    assert sentry_setup.studio_failure_context(a, 'render') == {'failure_stage': 'render'}
+    assert sentry_setup.studio_failure_context(a, 'render') == {'failure_stage': 'render', 'unexpected_type': 'RuntimeError'}
 
 
 def test_studio_expected_pipeline_failure_keeps_code_and_warning(monkeypatch, tmp_path):
@@ -263,8 +268,8 @@ def test_auto_frame_phase_survives_scrubbing_without_content(monkeypatch, tmp_pa
 
 
 @pytest.mark.parametrize('kind,code,status', [
-    ('AuthenticationError', 'authentication', 401),
-    ('PermissionDeniedError', 'authentication', 403),
+    ('AuthenticationError', 'llm_auth_invalid', 401),
+    ('PermissionDeniedError', 'llm_auth_invalid', 403),
     ('RateLimitError', 'rate_limited', 429),
     ('InternalServerError', 'provider_error', 503),
     ('APITimeoutError', 'timeout', None),
@@ -290,9 +295,15 @@ def test_text_sdk_failures_keep_provider_code_in_rewrite_and_render(monkeypatch,
         assert captured[-1]['phase'] == phase
         clean = sentry_setup.before_send({'level': 'error', 'tags': captured[-1],
             'exception': {'values': [{'type': kind, 'value': str(error)}]}})
+        if status in {401, 403, 429, 503}:
+            assert clean is None
+            continue
+        assert clean is not None
         assert 'private-provider-body' not in str(clean) and 'synthetic-key' not in str(clean)
-        assert clean['level'] == ('warning' if code in ('authentication', 'rate_limited') else 'error')
+        assert clean['level'] == 'error'
     assert sentry_setup.studio_error_code(RuntimeError('unrelated programming defect')) == 'unexpected'
+    assert sentry_setup.studio_error_code(OSError('private-local-file')) == 'unexpected'
+    # A permission error without a sharing code is still reported. WinError 32 is the lock.
     assert sentry_setup.studio_error_code(PermissionError('private-local-file')) == 'unexpected'
 
 
@@ -306,20 +317,51 @@ def test_before_send_keeps_anonymous_user_id_and_allowlisted_tags(monkeypatch, t
         'exception': {'values': [{'type': 'Error', 'value': 'private key sk-secret'}]},
         'user': {'id': '018f6b2a-7c3d-7b2a-8c11-111111111111', 'email': 'a@b.com', 'ip_address': '1.2.3.4'},
         'tags': {
-            'area': 'studio', 'error_code': 'provider_error', 'phase': 'production',
-            'provider': 'api88', 'upstream_error_type': 'rate_limited',
+            'area': 'studio', 'error_code': 'unexpected', 'phase': 'production',
+            'provider': 'api88', 'upstream_error_type': 'unknown',
             'base_url_host': '88api.ai', 'model': 'gpt-4o-mini',
-            'http_status': '429', 'failure_stage': 'analyze', 'private': 'secret',
+            'failure_stage': 'analyze', 'private': 'secret',
         },
     })
     assert clean['user'] == {'id': '018f6b2a-7c3d-7b2a-8c11-111111111111'}
     assert clean['tags']['provider'] == 'api88'
-    assert clean['tags']['upstream_error_type'] == 'rate_limited'
+    assert clean['tags']['upstream_error_type'] == 'unknown'
     assert clean['tags']['base_url_host'] == '88api.ai'
     assert clean['tags']['failure_stage'] == 'analyze'
     assert 'email' not in clean['user']
     assert 'private' not in clean['tags']
     assert 'sk-secret' not in json.dumps(clean)
+
+
+def test_provider_answers_do_not_spend_the_daily_budget(monkeypatch, tmp_path):
+    monkeypatch.setenv('AUTOCLIP_APP_DIR', str(tmp_path))
+    event = {
+        'event_id': '00000000-0000-0000-0000-000000000001',
+        'exception': {'values': [{'type': 'RateLimitError', 'value': 'private'}]},
+        'tags': {'http_status': '429', 'upstream_error_type': 'rate_limited', 'error_code': 'rate_limited'},
+    }
+    assert sentry_setup.before_send(event) is None
+    assert sentry_setup._before_send_limited(event) is None
+    assert not (tmp_path / 'sentry-daily.json').exists()
+
+
+def test_daily_cap_samples_after_full_fidelity_and_stops_at_the_hard_cap(monkeypatch, tmp_path):
+    monkeypatch.setenv('AUTOCLIP_APP_DIR', str(tmp_path))
+    monkeypatch.setattr(sentry_setup, '_volume_allows', lambda _event: True)
+    base = {'exception': {'values': [{'type': 'RuntimeError', 'value': 'boom'}]},
+            'tags': {'error_code': 'unexpected'}}
+    drop = {**base, 'event_id': '00000000-0000-0000-0000-000000000001'}
+    keep = {**base, 'event_id': '00000000-0000-0000-0000-000000000000'}
+    for _ in range(sentry_setup.DAILY_FULL_FIDELITY):
+        assert sentry_setup._before_send_limited(dict(drop)) is not None
+    assert sentry_setup._before_send_limited(dict(drop)) is None
+    assert sentry_setup._before_send_limited(dict(keep)) is not None
+    state = json.loads((tmp_path / 'sentry-daily.json').read_text(encoding='utf-8'))
+    assert state['sent'] == sentry_setup.DAILY_FULL_FIDELITY + 1
+    state['sent'] = sentry_setup.DAILY_HARD_CAP
+    (tmp_path / 'sentry-daily.json').write_text(json.dumps(state), encoding='utf-8')
+    assert sentry_setup._before_send_limited(dict(keep)) is None
+    assert json.loads((tmp_path / 'sentry-daily.json').read_text(encoding='utf-8'))['sent'] == sentry_setup.DAILY_HARD_CAP
 
 
 def test_launcher_identity_fallback_and_late_file_override(monkeypatch, tmp_path):
@@ -386,3 +428,55 @@ def test_source_blocked_is_classified_and_never_sent(monkeypatch, tmp_path):
     event = {'exception': {'values': [{'type': 'PipelineFailure', 'value': 'hint'}]},
              'tags': {'area': 'studio', 'phase': 'screening', 'error_code': 'source_blocked'}}
     assert sentry_setup.before_send(event) is None
+
+
+# --- 1.5.9 A1-3 ---------------------------------------------------------------------------------
+
+def test_a1_3_capture_crash_recovery_once_per_instance(monkeypatch, tmp_path):
+    from backend.core import sentry_setup as ss
+    monkeypatch.setenv('AUTOCLIP_SHUTDOWN_MARKER_DIR', str(tmp_path))
+    ss._crash_reported.clear()
+    monkeypatch.setattr(ss, '_initialized', True)
+    monkeypatch.setattr(ss, 'crash_reports_enabled', lambda: True)
+    captured = []
+
+    class Scope:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def set_tag(self, *a, **k): pass
+        fingerprint = None
+
+    class FakeSentry:
+        @staticmethod
+        def new_scope():
+            return Scope()
+        @staticmethod
+        def capture_event(payload):
+            captured.append(payload)
+            return 'evt-1'
+
+    import sys
+    monkeypatch.setitem(sys.modules, 'sentry_sdk', FakeSentry)
+    fields = {'restart_reason': 'crash', 'crash_exit': 'sigkill', 'crash_stage': 'analyze'}
+    assert ss.capture_crash_recovery('d' * 32, fields) == 'evt-1'
+    assert ss.capture_crash_recovery('d' * 32, fields) is None  # once per instance
+    assert len(captured) == 1
+    assert captured[0]['fingerprint'] == ['studio', 'service_restarted', 'sigkill', 'analyze']
+    assert ss.capture_crash_recovery('e' * 32, {**fields, 'restart_reason': 'user_quit'}) is None
+    assert ss.capture_crash_recovery('f' * 32, {**fields, 'restart_reason': 'update'}) is None
+    assert len(captured) == 1
+
+
+def test_a1_3_fault_frames_scrub_paths(tmp_path, monkeypatch):
+    monkeypatch.setenv('AUTOCLIP_SHUTDOWN_MARKER_DIR', str(tmp_path))
+    from backend.services.studio import run_heartbeat
+    instance = 'g' * 32
+    (tmp_path / f'{instance}.fault').write_text(
+        'File "/Users/charlie/app/backend/foo.py", line 12 in boom\n'
+        'File "/home/box/workspace/bar.py", line 3 in run\n',
+        encoding='utf-8',
+    )
+    frames = run_heartbeat.read_fault_frames(tmp_path / instance)
+    joined = str(frames)
+    assert 'Users' not in joined and 'home/' not in joined and '\\' not in joined
+    assert 'foo.py' in joined or any(f.get('filename') == 'foo.py' for f in frames)

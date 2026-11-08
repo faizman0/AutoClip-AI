@@ -43,6 +43,8 @@ export interface FeedbackContext {
   stage?: string
   error_message?: string
   error_code?: string
+  /** 1.5.9 2C: whitelist enum only when error_code=unexpected */
+  unexpected_type?: string
   project_id?: string
   /** 设置页 / 失败态都会尽量补齐 */
   llm_provider?: string
@@ -149,6 +151,7 @@ export async function submitFeedback(payload: FeedbackPayload): Promise<Feedback
     stage: payload.context.stage,
     errorMessage: payload.context.error_message,
     errorCode: payload.context.error_code,
+    unexpectedType: payload.context.unexpected_type,
     version: runtime.version,
     os: runtime.os,
     arch: runtime.arch,
@@ -169,7 +172,13 @@ export async function submitFeedback(payload: FeedbackPayload): Promise<Feedback
         event: 'feedback_submitted',
         distinct_id: feedbackDistinctId(draft),
         timestamp: new Date().toISOString(),
-        properties: captureProperties(draft),
+        properties: {
+          ...captureProperties(draft),
+          analytics_environment: import.meta.env.VITE_TELEMETRY_VALIDATION === 'true'
+            ? 'validation'
+            : import.meta.env.DEV ? 'development' : 'production',
+          runtime: '__TAURI_INTERNALS__' in window ? 'desktop' : 'web',
+        },
       }),
       signal: typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(8000) : undefined,
     })
