@@ -27,11 +27,11 @@ import ImportPreferenceSettings from '../features/settings/ImportPreferenceSetti
 type SectionKey = 'ai' | 'publish' | 'app' | 'feedback'
 const NAV: Array<{ key: SectionKey; label: string }> = [
   { key: 'ai', get label() { return t('settings.providers.nav') } },
-  { key: 'publish', get label() { return t("发布") } },
-  { key: 'app', get label() { return t("应用") } },
-  { key: 'feedback', get label() { return t("反馈") } },
+  { key: 'publish', get label() { return t("Publish") } },
+  { key: 'app', get label() { return t("App") } },
+  { key: 'feedback', get label() { return t("Feedback") } },
 ]
-// 旧链接（项目卡「模型设置」「转写设置」等）仍能打开，并滚到对应小节
+// Legacy links (project card "Model settings", "Transcription settings", etc.) can still be opened, and scroll to the corresponding section
 const SECTION_ALIASES: Record<string, { section: SectionKey; anchor?: string }> = {
   model: { section: 'ai', anchor: 'ai-defaults' },
   analysis: { section: 'ai', anchor: 'ai-defaults-analysis' },
@@ -63,10 +63,10 @@ const SettingsPage: React.FC = () => {
   return (
     <div className="ac-page">
       <header>
-        {/* 与详情页一致：页内返回，不依赖顶栏 logo */}
+        {/* Consistent with the details page: in-page back, not relying on the top-bar logo */}
         <button className="ac-back" onClick={() => navigate('/')}>
-          <Icon.Back />{t("项目")}</button>
-        <h1 className="ac-title">{t("设置")}</h1>
+          <Icon.Back />{t("Projects")}</button>
+        <h1 className="ac-title">{t("Settings")}</h1>
         <div className="ac-meta">
           <span className="ac-mono">{runtime.version !== 'unknown' ? `v${runtime.version}` : 'dev'}</span>
           <span className="dot" />
@@ -75,7 +75,7 @@ const SettingsPage: React.FC = () => {
       </header>
 
       <div className="ac-settings" style={{ marginTop: 36 }}>
-        <nav className="ac-settings-nav" aria-label={t("设置分类")}>
+        <nav className="ac-settings-nav" aria-label={t("Settings categories")}>
           {NAV.map((n) => (
             <button key={n.key} aria-current={active === n.key} onClick={() => navigate(`/settings?section=${n.key}`, { replace: true })}>{n.label}</button>
           ))}
@@ -86,28 +86,28 @@ const SettingsPage: React.FC = () => {
             <AIModelSettings requestedSection={requested} requestedProvider={new URLSearchParams(location.search).get('provider') || ''} />
           </div>
 
-          {/* ---------------- 应用 ---------------- */}
+          {/* ---------------- App ---------------- */}
           {active === 'app' && (
             <AppSection analyticsOn={analyticsOn} onAnalyticsChange={(on) => { setAnalyticsEnabled(on); setAnalyticsOn(on) }} />
           )}
 
           {active === 'publish' && <PublishSettings />}
 
-          {/* ---------------- 反馈 ---------------- */}
+          {/* ---------------- Feedback ---------------- */}
           {active === 'feedback' && (
-            <Section title={t("反馈")} description={t("哪里不对、想要什么，直接说。运行环境会自动附上，不含视频内容与 API 密钥。发送后正文和可选联系方式会先到 PostHog，再公开到 GitHub；邮箱不会公开。")}>
+            <Section title={t("Feedback")} description={t("Tell us what's wrong or what you want. The runtime environment is attached automatically, without video content or API keys. After sending, the body text and optional contact info first go to PostHog, then are published to GitHub; email addresses are not made public.")}>
               <div className="ac-rows">
-                <Row label={t("发送反馈")} hint={t("在应用内写一句话即可。会先经 PostHog 送达；故障进 GitHub Issue，想法进 Discussions。")}>
+                <Row label={t("Send feedback")} hint={t("Just write one sentence in the app. It is delivered via PostHog first; bugs go to GitHub Issues, ideas go to Discussions.")}>
                   <Btn variant="cta" size="sm" style={{ height: 32, fontSize: 13, padding: '0 16px' }} onClick={() => setFeedbackOpen(true)}>
-                    <Icon.Chat size={13} />{t("写反馈")}</Btn>
+                    <Icon.Chat size={13} />{t("Write feedback")}</Btn>
                 </Row>
-                <Row label={t("出了问题")} hint={t("版本、平台和模型写在 Issue 里，方便复现。")}>
-                  <Btn size="sm" onClick={() => openExternalLink(FEEDBACK_ISSUES_URL)}>{t("报告问题")}<Icon.External size={12} /></Btn>
+                <Row label={t("Something broke")} hint={t("The version, platform, and model are written in the Issue to make it easy to reproduce.")}>
+                  <Btn size="sm" onClick={() => openExternalLink(FEEDBACK_ISSUES_URL)}>{t("Report an issue")}<Icon.External size={12} /></Btn>
                 </Row>
-                <Row label={t("想法与用法")} hint={t("希望支持的能力和你的用法发到 Discussions，不要为此开 Issue。")}>
-                  <Btn size="sm" onClick={() => openExternalLink(FEEDBACK_DISCUSSIONS_URL)}>{t("去讨论")}<Icon.External size={12} /></Btn>
+                <Row label={t("Ideas and usage")} hint={t("Send the capabilities you hope for and how you use it to Discussions; do not open an Issue for this.")}>
+                  <Btn size="sm" onClick={() => openExternalLink(FEEDBACK_DISCUSSIONS_URL)}>{t("Go to Discussions")}<Icon.External size={12} /></Btn>
                 </Row>
-                <Row label={t("当前状态与已知问题")} hint={t("发版节奏、已知 bug 与解决办法都在这条置顶 Issue 里。")}>
+                <Row label={t("Current status and known issues")} hint={t("Release cadence, known bugs, and workarounds are all in this pinned Issue.")}>
                   <Btn variant="text" size="sm" onClick={() => openExternalLink('https://github.com/zhouxiaoka/autoclip/issues/96')}>#96 <Icon.External size={12} /></Btn>
                 </Row>
               </div>
@@ -121,7 +121,7 @@ const SettingsPage: React.FC = () => {
   )
 }
 
-/* ---------------- 应用 ---------------- */
+/* ---------------- App ---------------- */
 const AppSection: React.FC<{ analyticsOn: boolean; onAnalyticsChange: (on: boolean) => void }> = ({ analyticsOn, onAnalyticsChange }) => {
   useTranslation()
   const { theme, setTheme } = useTheme()
@@ -153,25 +153,25 @@ const AppSection: React.FC<{ analyticsOn: boolean; onAnalyticsChange: (on: boole
             setCrashOn(privacy.crash_reports)
           }
         } catch {
-          /* 后端未起或非桌面数据目录时用 localStorage */
+          /* Use localStorage when the backend is not up or this is not a desktop data directory */
         }
       } catch (err) {
-        console.error('检查自动启动状态失败:', err)
+        console.error('Failed to check autostart status:', err)
       }
     })()
     return () => { active = false }
   }, [])
 
   const toggleAutostart = async (enabled: boolean) => {
-    if (!desktop) { message.error(t("此功能仅在桌面应用中可用")); return }
+    if (!desktop) { message.error(t("This feature is only available in the desktop app")); return }
     setBusy(true)
     try {
       const { invoke } = await import('@tauri-apps/api/core')
       await invoke(enabled ? 'enable_autostart' : 'disable_autostart')
       setAutostart(enabled)
     } catch (err) {
-      console.error('切换自动启动状态失败:', err)
-      message.error(t("操作失败: {{value1}}", { value1: err }))
+      console.error('Failed to toggle autostart state:', err)
+      message.error(t("Operation failed: {{value1}}", { value1: err }))
     } finally {
       setBusy(false)
     }
@@ -190,72 +190,72 @@ const AppSection: React.FC<{ analyticsOn: boolean; onAnalyticsChange: (on: boole
     try {
       await settingsApi.updatePrivacy({ crash_reports: enabled })
     } catch {
-      message.warning(t("前端开关已生效，但后端隐私设置保存失败，请重试。"))
+      message.warning(t("The frontend toggle took effect, but saving the backend privacy setting failed. Please retry."))
     }
   }
 
   const handleCheckUpdate = async () => {
-    if (!desktop && !appUpdate.preview) { message.info(t('检查更新仅在桌面应用中可用')); return }
+    if (!desktop && !appUpdate.preview) { message.info(t('Checking for updates is only available in the desktop app')); return }
     try {
       const result = await appUpdate.checkNow()
       if (result === 'current') {
         const current = appUpdate.currentVersion || version
-        message.success(current ? t('已是最新版本（{{version}}）', { version: current }) : t('已是最新版本'))
+        message.success(current ? t('Already on the latest version ({{version}})', { version: current }) : t('Already on the latest version'))
       }
     } catch (err) {
       const text = err instanceof Error ? err.message : String(err)
-      if (text === 'desktop-only') message.info(t('检查更新仅在桌面应用中可用'))
-      else message.error(t('检查更新失败: {{error}}', { error: text.split('{{').join('{') }))
+      if (text === 'desktop-only') message.info(t('Checking for updates is only available in the desktop app'))
+      else message.error(t('Failed to check for updates: {{error}}', { error: text.split('{{').join('{') }))
     }
   }
 
   const shownVersion = appUpdate.currentVersion || version
   const versionHint = appUpdate.phase === 'ready' || appUpdate.phase === 'restarting'
-    ? t('可更新到 {{version}}', { version: appUpdate.version })
+    ? t('Can update to {{version}}', { version: appUpdate.version })
     : appUpdate.phase === 'downloading'
-      ? t('正在准备 {{version}}', { version: appUpdate.version })
+      ? t('Preparing {{version}}', { version: appUpdate.version })
       : appUpdate.phase === 'failed'
-        ? t('更新没有下载完：{{error}}', { error: appUpdate.error })
+        ? t('The update did not finish downloading: {{error}}', { error: appUpdate.error })
         : shownVersion
-          ? t('当前 {{version}}', { version: shownVersion })
-          : t('桌面应用可检查 GitHub Release 上的更新。')
+          ? t('Current {{version}}', { version: shownVersion })
+          : t('The desktop app can check for updates on GitHub Releases.')
 
   return (
-    <Section title={t("应用")} description={t("外观、启动与隐私。")}>
+    <Section title={t("App")} description={t("Appearance, startup, and privacy.")}>
       <div className="ac-rows">
-        <Row label={t("外观")} hint={t("首次启动跟随系统。")}>
-          <Segmented size="sm" ariaLabel={t("外观")} value={theme} onChange={setTheme} options={[{ value: 'light', label: t("浅色") }, { value: 'dark', label: t("深色") }]} />
+        <Row label={t("Appearance")} hint={t("Follows the system on first launch.")}>
+          <Segmented size="sm" ariaLabel={t("Appearance")} value={theme} onChange={setTheme} options={[{ value: 'light', label: t("Light") }, { value: 'dark', label: t("Dark") }]} />
         </Row>
-        <Row label={t("开机自动启动")} hint={t("启用后随系统启动，可从托盘打开。仅桌面应用可用。")}>
+        <Row label={t("Launch at startup")} hint={t("When enabled, starts with the system and can be opened from the tray. Only available in the desktop app.")}>
           <Switch checked={autostart} onChange={toggleAutostart} loading={busy} disabled={!desktop} />
         </Row>
-        <Row label={t("制作时阻止电脑休眠")} hint={t("制作期间保持系统唤醒（允许息屏）。关闭后电脑可按系统计划休眠。")}>
+        <Row label={t("Prevent the computer from sleeping during production")} hint={t("Keeps the system awake during production (allows the screen to turn off). When off, the computer can sleep according to the system schedule.")}>
           <Switch checked={keepAwake} onChange={toggleKeepAwake} />
         </Row>
         <OutputBrandingSetting />
         <OutputCaptionsSetting />
         {(desktop || appUpdate.preview) && (
           <>
-            <Row label={t('版本')} hint={versionHint}>
+            <Row label={t('Version')} hint={versionHint}>
               {appUpdate.phase === 'ready' || appUpdate.phase === 'restarting' ? (
-                <Btn size="sm" variant="cta" loading={appUpdate.phase === 'restarting'} onClick={() => void appUpdate.restart()}>{t('更新并重启')}</Btn>
+                <Btn size="sm" variant="cta" loading={appUpdate.phase === 'restarting'} onClick={() => void appUpdate.restart()}>{t('Update and restart')}</Btn>
               ) : appUpdate.phase === 'downloading' ? (
-                <Btn size="sm" onClick={appUpdate.showToast}>{t('查看进度')}</Btn>
+                <Btn size="sm" onClick={appUpdate.showToast}>{t('View progress')}</Btn>
               ) : appUpdate.phase === 'failed' ? (
-                <Btn size="sm" onClick={() => void appUpdate.retry()}>{t('重试')}</Btn>
+                <Btn size="sm" onClick={() => void appUpdate.retry()}>{t('Retry')}</Btn>
               ) : (
-                <Btn size="sm" loading={appUpdate.phase === 'checking'} onClick={() => void handleCheckUpdate()}>{t('检查更新')}</Btn>
+                <Btn size="sm" loading={appUpdate.phase === 'checking'} onClick={() => void handleCheckUpdate()}>{t('Check for updates')}</Btn>
               )}
             </Row>
-            <Row label={t('启动时检查更新')} hint={t('发现新版本时提醒，同一版本一天最多一次。关闭后仍可手动检查。')}>
+            <Row label={t('Check for updates at startup')} hint={t('Notifies you when a new version is found, at most once per day for the same version. Manual checks are still available when off.')}>
               <Switch checked={appUpdate.remindersEnabled} onChange={appUpdate.setRemindersEnabled} />
             </Row>
           </>
         )}
-        <Row label={t("匿名使用统计")} hint={t("只采集功能使用、出片成功 / 失败等匿名事件，不含视频内容、字幕文本或 API 密钥。关闭后仍可在反馈里主动发送。")}>
+        <Row label={t("Anonymous usage analytics")} hint={t("Only collects anonymous events such as feature usage and final-video success / failure, without video content, subtitle text, or API keys. When off, you can still actively send feedback.")}>
           <Switch checked={analyticsOn} onChange={onAnalyticsChange} />
         </Row>
-        <Row label={t("崩溃报告")} hint={t("把崩溃栈发到 Sentry，便于修复。不含视频内容、字幕或 API 密钥。未配置上报地址时不会发送。")}>
+        <Row label={t("Crash reports")} hint={t("Sends crash stacks to Sentry to help with fixes. Does not include video content, subtitles, or API keys. Nothing is sent when no reporting endpoint is configured.")}>
           <Switch checked={crashOn} onChange={toggleCrashReports} />
         </Row>
       </div>

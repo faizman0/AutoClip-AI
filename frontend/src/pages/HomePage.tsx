@@ -50,19 +50,19 @@ export default function HomePage() {
   const [exampleBusy, setExampleBusy] = useState(false)
   const [aiSettings, setAiSettings] = useState<ModelSettings | null>(null)
 
-  // 使用项目轮询Hook
+  // Use the project polling hook
   useProjectPolling({
     onProjectsUpdate: (updatedProjects) => {
       setProjects(updatedProjects || [])
     },
     enabled: true,
-    interval: 30000, // 30秒轮询一次，减少频繁请求
+    interval: 30000, // Poll every 30 seconds to reduce frequent requests
     // Mirror studio useWorkspace (#502): shell backend-started → refresh list now.
     // Module fn keeps the subscribe identity stable across HomePage re-renders.
     subscribeRestart: subscribeBackendRestart,
   })
 
-  // 全局保险：当没有运行中的项目时，强制停止进度轮询并清空缓存
+  // Global safety net: when there are no running projects, force-stop progress polling and clear the cache
   useEffect(() => {
     const hasActive = projects.some(p => p.status === 'processing' || p.status === 'pending')
     if (!hasActive) {
@@ -70,18 +70,18 @@ export default function HomePage() {
         const { stopPolling, clearAllProgress } = useSimpleProgressStore.getState()
         stopPolling()
         clearAllProgress()
-        console.log('无运行项目，已全局停止进度轮询并清空进度缓存')
+        console.log('No running projects; globally stopped progress polling and cleared the progress cache')
       } catch (e) {
-        console.warn('停止全局进度轮询时出现问题:', e)
+        console.warn('A problem occurred while stopping global progress polling:', e)
       }
     }
   }, [projects])
 
   useEffect(() => {
-    // 延迟加载项目，避免启动时立即发起大量请求
+    // Delay loading projects to avoid firing a large number of requests immediately at startup
     const timer = setTimeout(() => {
       loadProjects()
-    }, 1000) // 延迟1秒加载
+    }, 1000) // Delay by 1 second
     
     return () => clearTimeout(timer)
   }, [])
@@ -89,15 +89,15 @@ export default function HomePage() {
   const loadProjects = async () => {
     setLoading(true)
     try {
-      // 从后端API获取真实项目数据
+      // Fetch real project data from the backend API
       const projects = await projectApi.getProjects()
-      // 确保projects是数组类型
+      // Ensure projects is an array type
       const safeProjects = Array.isArray(projects) ? projects : []
       setProjects(safeProjects)
     } catch (error) {
-      message.error(t("加载项目失败"))
+      message.error(t("Failed to load projects"))
       console.error('Load projects error:', error)
-      // 如果API调用失败，设置空数组
+      // If the API call fails, set an empty array
       setProjects([])
     } finally {
       setLoading(false)
@@ -108,17 +108,17 @@ export default function HomePage() {
     try {
       await projectApi.deleteProject(id)
       deleteProject(id)
-      message.success(t("项目删除成功"))
+      message.success(t("Project deleted successfully"))
     } catch (error) {
-      message.error(t("删除项目失败"))
+      message.error(t("Failed to delete project"))
       console.error('Delete project error:', error)
     }
   }
 
-  // 由 ProjectCard 在「用户手动点重试」且重试请求已成功后调用。
-  // ProjectCard.handleRetry 已经发过 start/retryProcessing 请求，这里只负责
-  // 提示 + 刷新列表，绝不能再发一次重试请求（会和卡片自身的请求叠加，并制造
-  // loadProjects→重挂载→自动启动 的循环）。
+  // Called by ProjectCard when the user manually clicks retry and the retry request has already succeeded.
+  // ProjectCard.handleRetry has already sent the start/retryProcessing request; here we only handle
+  // the toast + refreshing the list, and must never send another retry request (which would stack with the card's own request and create
+  // a loadProjects→remount→auto-start loop).
   useEffect(() => {
     let live = true
     modelSettingsApi.get().then(value => { if (live) setAiSettings(value) }).catch(() => { if (live) setAiSettings(null) })
@@ -140,7 +140,7 @@ export default function HomePage() {
     const nextModel = choice || recommendTimelineReplacement(aiSettings)
     const project = projects.find(item => item.id === projectId)
     if (!aiSettings || !nextModel || !project) {
-      message.error(t("重试失败，请稍后再试"))
+      message.error(t("Retry failed, please try again later"))
       return
     }
     const managed = !!(project.settings?.smart_import || project.processing_config?.smart_import)
@@ -158,16 +158,16 @@ export default function HomePage() {
       setAiSettings(saved)
       if (managed) await studioApi.retry(projectId, { retry_kind: 'switch_model' })
       else await projectApi.retryProcessing(projectId)
-      message.success(t("已开始重试处理项目"))
+      message.success(t("Started retrying project processing"))
       await loadProjects()
     } catch (error) {
-      message.error(t("重试失败，请稍后再试"))
+      message.error(t("Retry failed, please try again later"))
       console.error('Switch model and retry error:', error)
     }
   }
 
   const handleRetryProject = async () => {
-    message.success(t("已开始重试处理项目"))
+    message.success(t("Started retrying project processing"))
     try {
       await loadProjects()
     } catch (error) {
@@ -181,7 +181,7 @@ export default function HomePage() {
       await startExampleProject(navigate)
       void loadProjects().catch(() => undefined)
     } catch (error) {
-      message.error(t("示例项目暂时不可用"))
+      message.error(t("The example project is temporarily unavailable"))
       console.error('Example project error:', error)
     } finally {
       setExampleBusy(false)
@@ -189,13 +189,13 @@ export default function HomePage() {
   }
 
   const handleProjectCardClick = (project: Project) => {
-    // 导入中状态的项目不能点击进入详情页
+    // Projects in importing state cannot be clicked into the details page
     if (project.status === 'pending' && !project.settings?.smart_import && !project.processing_config?.smart_import) {
-      message.warning(t("项目正在导入中，请稍后再查看详情"))
+      message.warning(t("The project is importing, please check the details later"))
       return
     }
     
-    // 其他状态可以正常进入详情页
+    // Other states can normally enter the details page
     navigate(`/project/${project.id}`)
   }
 
@@ -207,7 +207,7 @@ export default function HomePage() {
       return matchesStatus
     })
     .sort((a, b) => {
-      // 按创建时间倒序排列，最新的在前面
+      // Sort by creation time in descending order, newest first
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     })
 
@@ -220,15 +220,15 @@ export default function HomePage() {
         <div style={{ maxWidth: '1200px', margin: '0 auto', position: 'relative' }}>
           <FirstRunSetup onStatus={setSetupNeeded} openRequest={setupRequest} />
           <CreativeImport onImported={loadProjects} blocked={setupNeeded === true} onBlocked={() => setSetupRequest(n => n + 1)} onExample={() => void openExample()} exampleBusy={exampleBusy} />
-          {pendingImports.length>0&&<div className="studio-import-resume"><b>{t('未完成的导入')}</b>{pendingImports.map(p=><button key={p.id} className="studio-link" onClick={()=>navigate(`/import/${p.id}`)}>{p.name} · {t('继续导入确认')}</button>)}</div>}
+          {pendingImports.length>0&&<div className="studio-import-resume"><b>{t('Unfinished imports')}</b>{pendingImports.map(p=><button key={p.id} className="studio-link" onClick={()=>navigate(`/import/${p.id}`)}>{p.name} · {t('Continue import confirmation')}</button>)}</div>}
 
-          {/* 项目管理区域 */}
+          {/* Project management area */}
           <div style={{
             background: 'transparent',
             padding: '0',
             marginBottom: '32px'
           }}>
-            {/* 项目列表标题区域 */}
+            {/* Project list header area */}
             <div style={{
               display: 'flex',
               justifyContent: 'space-between',
@@ -240,19 +240,19 @@ export default function HomePage() {
                 <Title
                   level={2}
                   style={{ margin: 0, color: 'var(--ac-ink)', fontSize: '16px', fontWeight: 600 }}
-                >{t("我的项目")}</Title>
+                >{t("My projects")}</Title>
                 <Text style={{ color: 'var(--ac-muted)', fontSize: '13px' }}>
                   {filteredProjects.length}
                 </Text>
               </div>
               
-              {/* 状态筛选移到右侧 */}
+              {/* Status filter moved to the right */}
               <div style={{ 
                 display: 'flex', 
                 alignItems: 'center'
               }}>
                 <Select
-                  placeholder={t("全部状态")}
+                  placeholder={t("All statuses")}
                   value={statusFilter}
                   onChange={setStatusFilter}
                   variant="borderless"
@@ -260,15 +260,15 @@ export default function HomePage() {
                   suffixIcon={<span style={{ color: 'var(--ac-muted)', fontSize: '10px' }}>⌄</span>}
                   allowClear
                 >
-                  <Option value="all">{t("全部状态")}</Option>
-                  <Option value="completed">{t("已完成")}</Option>
-                  <Option value="processing">{t("处理中")}</Option>
-                  <Option value="error">{t("处理失败")}</Option>
+                  <Option value="all">{t("All statuses")}</Option>
+                  <Option value="completed">{t("Completed")}</Option>
+                  <Option value="processing">{t("Processing")}</Option>
+                  <Option value="error">{t("Processing failed")}</Option>
                 </Select>
               </div>
             </div>
 
-            {/* 项目列表内容 */}
+            {/* Project list content */}
              <div>
                {loading ? (
                  <div style={{
@@ -279,20 +279,20 @@ export default function HomePage() {
                    border: '1px solid var(--ac-line)'
                  }}>
                    <Spin size="large" />
-                   <div style={{ marginTop: '18px', color: 'var(--ac-muted)', fontSize: '14px' }}>{t("正在加载项目列表…")}</div>
+                   <div style={{ marginTop: '18px', color: 'var(--ac-muted)', fontSize: '14px' }}>{t("Loading project list…")}</div>
                  </div>
                ) : filteredProjects.length === 0 ? (
                  projects.length === 0 ? (
-                   /* 空态按 DESIGN.md：一句话 + 一件可做的事。示例项目不需要 Key，先看效果再导入自己的视频。 */
+                   /* Empty state per DESIGN.md: one sentence + one thing to do. The example project does not need a key, so you can see the result first and then import your own video. */
                    <div className="ac-empty">
-                     <b>{t("还没有项目")}</b>
-                     <span>{t("从上方导入一段视频，或者先用示例项目看看出片效果。")}</span>
+                     <b>{t("No projects yet")}</b>
+                     <span>{t("Import a video from above, or try the example project first to see the output.")}</span>
                      <div style={{ marginTop: 18 }}>
-                       <Btn size="sm" loading={exampleBusy} onClick={() => void openExample()}>{t("用示例项目看看效果")}</Btn>
+                       <Btn size="sm" loading={exampleBusy} onClick={() => void openExample()}>{t("See the result with the example project")}</Btn>
                      </div>
                    </div>
                  ) : (
-                   <div className="ac-empty"><b>{t("没有找到匹配的项目")}</b></div>
+                   <div className="ac-empty"><b>{t("No matching projects found")}</b></div>
                  )
                ) : (
                  <div style={{
@@ -325,5 +325,3 @@ export default function HomePage() {
     </Layout>
   )
 }
-
-
