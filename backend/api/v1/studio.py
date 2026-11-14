@@ -658,11 +658,31 @@ def output_variant_kit(project_id: str, variant_id: str, db: Session = Depends(g
     from backend.services.studio import publish_kit
     project_or_404(project_id, db)
     variant, job = _variant_job(project_id, variant_id)
-    video = store.directory(project_id) / 'output' / 'studio' / f"{job['job_id']}.mp4"
+    
+    # Check if there is a newer completed export job for the same draft
+    state = call(store.read, project_id)
+    draft_id = variant.get('draft_id')
+    latest_job = job
+    if draft_id:
+        completed_jobs = [
+            j for j in state.get('jobs', [])
+            if j.get('draft_id') == draft_id and j.get('status') == 'completed'
+        ]
+        if completed_jobs:
+            latest_job = max(completed_jobs, key=lambda j: j.get('completed_at') or j.get('created_at') or '')
+
+    video = store.directory(project_id) / 'output' / 'studio' / f"{latest_job['job_id']}.mp4"
     if not video.is_file():
-        raise HTTPException(404, '成片文件已移除')
-    cover, _ = publish_kit.cover_file(project_id, job['job_id'], variant['strategy_id'])
-    post = variant.get('post') or {'title': (job.get('result') or {}).get('title', '')}
+        # Fallback to the original variant job video if latest_job video missing
+        video = store.directory(project_id) / 'output' / 'studio' / f"{job['job_id']}.mp4"
+        if not video.is_file():
+            raise HTTPException(404, '成片文件已移除')
+            
+    cover, _ = publish_kit.cover_file(project_id, latest_job['job_id'], variant['strategy_id'])
+    if not cover:
+        cover, _ = publish_kit.cover_file(project_id, job['job_id'], variant['strategy_id'])
+        
+    post = variant.get('post') or {'title': (latest_job.get('result') or {}).get('title', '')}
     strategy = platform_strategy(variant['strategy_id'])
     path, name = publish_kit.kit_file(video, cover, post, strategy.label, english=strategy.audience_language in ('en', 'id'))
     return FileResponse(path, media_type='application/zip', headers={'Content-Disposition': f"attachment; filename*=UTF-8''{quote(name)}"},

@@ -1452,10 +1452,11 @@ def build_fill(packaging, duration: float, fps: int = 30, safe_area: str = 'xiao
     roster = [_speaker_with_at(item) for item in (_get(packaging, 'speakers', []) or [])]
     rows = _transcript_rows(transcript)
     for cue in cues:
-        text = display_text(str(_get(cue, 'text', '')).strip())
+        # Prioritize original ASR text over LLM rewritten text
+        text = display_text(str(_get(cue, 'original', '') or _get(cue, 'text', '')).strip())
         if not text:
             continue
-        raw_original = display_text(str(_get(cue, 'original', '') or ''))
+        raw_original = display_text(str(_get(cue, 'original', '') or '')) if _get(cue, 'original', '') and _get(cue, 'original', '') != _get(cue, 'text', '') else ''
         # English wraps in the Street stylesheet. It is not clipped to a nowrap line.
         original = ' '.join(raw_original.split()) if (template or '') in HTML_TEMPLATE_IDS else _source_line(raw_original, source_limit)
         speaker = _agree_speaker(

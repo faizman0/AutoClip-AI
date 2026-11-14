@@ -208,8 +208,9 @@ def scene_ass(packaging: Packaging, scenes: list[Scene], index: int, word_timing
         start, end = cue.start, cue.end
         if end <= source_scene.start or start >= source_scene.end:
             continue
-        spoken = display_text(cue.text)
-        original_line = display_text(cue.original)
+        # Option 1: prioritize original ASR text over LLM re-segmented 'text'
+        spoken = display_text(cue.original or cue.text)
+        original_line = display_text(cue.original) if cue.original and cue.original != cue.text else ''
         if interview and packaging.audience_language == 'zh' and not packaging.speaker_prefix:
             spoken = strip_speaker_prefix(spoken, cue.speaker)
         if not spoken and not original_line:
