@@ -125,7 +125,7 @@ def status(project_id: str, *, export_kits: bool = False) -> dict:
                 if not kit.exists():
                     kit.parent.mkdir(exist_ok=True)
                     strategy = platform_strategy(variant['strategy_id'])
-                    temporary, _ = publish_kit.kit_file(video, cover, post, strategy.label, english=strategy.audience_language == 'en')
+                    temporary, _ = publish_kit.kit_file(video, cover, post, strategy.label, english=strategy.audience_language in ('en', 'id'))
                     try:
                         os.replace(temporary, kit)
                     finally:

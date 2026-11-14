@@ -21,8 +21,8 @@ KANA = re.compile(r'[぀-ヿ]')
 
 
 def foreign_for(audience: str, text: str) -> bool:
-    """Text an English-platform viewer cannot read: any Chinese or Japanese characters."""
-    return audience == 'en' and bool(CJK.search(text or '') or KANA.search(text or ''))
+    """Text an English or Indonesian platform viewer cannot read: any Chinese or Japanese characters."""
+    return audience in ('en', 'id') and bool(CJK.search(text or '') or KANA.search(text or ''))
 
 
 
@@ -52,7 +52,7 @@ def _items(value) -> list[dict]:
     # Model lists sometimes hold bare strings or come back as one object: keep only the objects.
     return [item for item in value if isinstance(item, dict)] if isinstance(value, list) else []
 LATIN = re.compile(r'[A-Za-z]')
-TITLE_LIMIT = {'zh': 12, 'en': 36}
+TITLE_LIMIT = {'zh': 12, 'en': 36, 'id': 36}
 TAG_LIMIT = 10
 MAX_TAGS = 5
 MAX_SEGMENT_LINES = 12  # translated sentences may span short ASR rows; reject only paragraph-sized lumps

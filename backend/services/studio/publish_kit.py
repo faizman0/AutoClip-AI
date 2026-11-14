@@ -136,14 +136,14 @@ def ai_prompt(strategy_id: str, lines: list[str], accent: int, name: str, palett
     slot, layout = AI_LAYOUT.get(strategy_id, AI_LAYOUT['douyin'])
     colour = '#' + PALETTES.get(palette or 'azure', PALETTES['azure'])[0]
     keyword = lines[accent] if 0 <= accent < len(lines) and len(lines) > 1 else lines[-1]
-    english = platform_strategy(strategy_id).audience_language == 'en'
+    english = platform_strategy(strategy_id).audience_language in ('en', 'id')
     title = ' / '.join(lines)
     return (
         f'Design a {slot} in a premium editorial magazine-cover style for an interview clip. '
         f'Subject: the person in the reference image{" (" + name + ")" if name else ""} — keep their face, hair, age and clothing exactly; '
         f'never replace, restyle or beautify them. Cut the subject out cleanly, head and shoulders large and sharp, with a soft rim light; '
         f'background replaced by a deep, near-black gradient with subtle film grain, no clutter. Layout: {layout}. '
-        f'Typography: a heavy condensed sans-serif headline, {"set in English" if english else "set in Simplified Chinese"}, '
+        f'Typography: a heavy condensed sans-serif headline, {"set in English or Latin script" if english else "set in Simplified Chinese"}, '
         f'stacked in short lines exactly reading "{title}"; the words "{keyword}" sit on a solid {colour} colour block (or in {colour}), '
         f'the rest in off-white; strong hierarchy, generous margins, nothing touching the edges, the face never covered. '
         f'Keep every letter inside the central 88% of the width and below the top 5% of the height; never crop or cut off text. '

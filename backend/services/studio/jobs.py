@@ -976,9 +976,9 @@ def _caption_mask(project_id, strategy_id):
     from backend.services.platform_strategy import platform_strategy
     generation = store.read(project_id).get('generation') or {}
     band, language = generation.get('burned_caption_band'), generation.get('burned_caption_language')
-    if not (generation.get('source_has_burned_subtitles') and band and language and language != 'en'):
+    if not (generation.get('source_has_burned_subtitles') and band and language and language not in ('en', 'id')):
         return None
-    return list(band) if platform_strategy(strategy_id).audience_language == 'en' else None
+    return list(band) if platform_strategy(strategy_id).audience_language in ('en', 'id') else None
 
 
 BURNED_LANGUAGE_PROMPT = (
@@ -1144,16 +1144,16 @@ def _audience_title(value, strategy_id, post):
     """The version's title in its audience's language: clip titles are written in Chinese."""
     from backend.services.platform_strategy import platform_strategy
     from backend.services.studio.packaging import CJK
-    if platform_strategy(strategy_id).audience_language != 'en' or not CJK.search(value.get('title') or ''):
+    target_lang = platform_strategy(strategy_id).audience_language
+    if target_lang not in ('en', 'id') or not CJK.search(value.get('title') or ''):
         return value
     from backend.services.studio.packaging import foreign_for
     lines = (value.get('packaging') or {}).get('title_lines') or []
-    english = ' '.join(lines) if lines and not any(foreign_for('en', line) for line in lines) else (post or {}).get('title', '')
-    if not english or foreign_for('en', english):
-        # No English title came back: an English caption line beats the Chinese clip title.
+    target_title = ' '.join(lines) if lines and not any(foreign_for(target_lang, line) for line in lines) else (post or {}).get('title', '')
+    if not target_title or foreign_for(target_lang, target_title):
         cues = (value.get('packaging') or {}).get('cues') or []
-        english = next((cue['text'] for cue in cues if cue.get('text') and not foreign_for('en', cue['text'])), '') or 'Untitled clip'
-    return {**value, 'title': english[:120]}
+        target_title = next((cue['text'] for cue in cues if cue.get('text') and not foreign_for(target_lang, cue['text'])), '') or 'Untitled clip'
+    return {**value, 'title': target_title[:120]}
 
 
 def _content_key(value):

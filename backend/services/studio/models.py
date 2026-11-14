@@ -113,7 +113,7 @@ class Packaging(BaseModel):
     model_config = ConfigDict(extra='forbid')
     version: Literal[1, 2] = 1
     template: str
-    audience_language: Literal['zh', 'en']
+    audience_language: Literal['zh', 'en', 'id']
     source_language: Literal['zh', 'en', 'other'] = 'other'
     title_lines: list[str] = Field(default_factory=list, max_length=2)
     title_accent_line: int = Field(default=1, ge=0, le=1)

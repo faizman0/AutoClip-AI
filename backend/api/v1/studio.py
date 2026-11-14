@@ -664,7 +664,7 @@ def output_variant_kit(project_id: str, variant_id: str, db: Session = Depends(g
     cover, _ = publish_kit.cover_file(project_id, job['job_id'], variant['strategy_id'])
     post = variant.get('post') or {'title': (job.get('result') or {}).get('title', '')}
     strategy = platform_strategy(variant['strategy_id'])
-    path, name = publish_kit.kit_file(video, cover, post, strategy.label, english=strategy.audience_language == 'en')
+    path, name = publish_kit.kit_file(video, cover, post, strategy.label, english=strategy.audience_language in ('en', 'id'))
     return FileResponse(path, media_type='application/zip', headers={'Content-Disposition': f"attachment; filename*=UTF-8''{quote(name)}"},
                         background=BackgroundTask(path.unlink, missing_ok=True))
 
