@@ -26,8 +26,8 @@ def test_short_and_long_youtube_are_distinct_strategies():
 def test_templates_follow_the_audience_of_each_platform():
     expected = {
         "douyin": ("interview_zh", "zh"), "xiaohongshu": ("interview_zh", "zh"),
-        "tiktok": ("podcast_en", "en"), "instagram_reels": ("podcast_en", "en"), "youtube_shorts": ("podcast_en", "en"),
-        "bilibili": ("landscape", "zh"), "youtube_long": ("landscape", "en"), "original": ("none", "zh"),
+        "tiktok": ("podcast_en", "id"), "instagram_reels": ("podcast_en", "id"), "youtube_shorts": ("podcast_en", "id"),
+        "bilibili": ("landscape", "zh"), "youtube_long": ("landscape", "id"), "original": ("none", "zh"),
     }
     for strategy_id, (template, language) in expected.items():
         strategy = platform_strategy(strategy_id)

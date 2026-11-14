@@ -430,7 +430,7 @@ def source_cues(lines: list[dict[str, Any]], audience: str) -> list[dict[str, An
 
 def _translated_rows(lines: list[dict[str, Any]], audience: str, call, *, keep_original=False,
                      protected_terms: list[str] | None = None) -> list[dict[str, Any]]:
-    language = {'zh': '简体中文', 'en': 'English'}[audience]
+    language = {'zh': '简体中文', 'en': 'English', 'id': 'Bahasa Indonesia'}[audience]
     try:
         result = call(f'把 lines 逐条翻译成{language}，口语自然，不合并、不遗漏，不添加事实。'
                       'protected_terms 中的原文专名和术语在译文中必须保留拼写，不猜测音译或改成地名。'

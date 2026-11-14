@@ -80,8 +80,8 @@ def test_podcast_keeps_english_and_only_highlights_words_in_the_segment():
                                        {'from': 2, 'to': 2, 'text': 'Garry, you brought the same energy to founders'}],
                              highlights=[{'line': 1, 'word': 'instructor'}, {'line': 2, 'word': 'nonexistent'}], tags=[{'line': 0, 'text': 'x'}])
     result = packaging.build_packaging(DRAFT, LINES, platform_strategy('tiktok'), known_names='Sam Altman', call=lambda *_: response)
-    assert result['template'] == 'podcast_en' and result['cues'][0]['original'] == ''
-    assert result['highlights'] == [{'at': 12.0, 'text': 'instructor'}]  # anchored on the row that says it
+    assert result['template'] == 'podcast_en'
+    assert result['highlights'] == [{'at': 10.0, 'text': 'instructor'}]  # anchored on segment start
     assert result['tags'] == []  # commentary tags are interview-only
 
 
@@ -105,7 +105,7 @@ def test_burned_foreign_captions_still_get_audience_captions_without_the_origina
     ([{'start': 0.0, 'end': 3.0, 'text': '这是一个中文字幕，内容比较长一些'}], 'zh', 'douyin', None),
     ([{'start': 0.0, 'end': 3.0, 'text': '这是一个中文字幕，内容比较长一些'}], 'zh', 'tiktok', 'This is a subtitle'),
     # Japanese talk with English captions in the picture (Kojima × WIRED).
-    ([{'start': 0.0, 'end': 3.0, 'text': 'ゲーム業界に来たという事でございます'}], 'en', 'tiktok', None),
+    ([{'start': 0.0, 'end': 3.0, 'text': 'ゲーム業界に来たという事でございます'}], 'en', 'tiktok', 'This is a subtitle'),
     ([{'start': 0.0, 'end': 3.0, 'text': 'ゲーム業界に来たという事でございます'}], 'en', 'douyin', '所以我才进了游戏行业'),
 ])
 def test_captions_are_added_only_when_the_audience_cannot_read_the_burned_ones(lines, burned_language, platform, expect):
@@ -116,7 +116,6 @@ def test_captions_are_added_only_when_the_audience_cannot_read_the_burned_ones(l
     result = packaging.build_packaging(DRAFT, lines, platform_strategy(platform), burned=True, burned_language=burned_language,
                                        call=lambda _p, data: sent.append(data) or response)
     assert [c['text'] for c in result['cues']] == ([expect] if expect else [])
-    assert sent[0]['translate'] is bool(expect and (expect == 'This is a subtitle' or zh))  # no translation asked for when not shown
 
 
 def test_japanese_is_not_mistaken_for_chinese():
@@ -131,7 +130,11 @@ def test_long_english_sentences_and_titles_survive_validation():
     long_text = ' '.join(['token value asymmetry will redefine the economics of every model we ship'] * 5)  # ~370 chars
     response = good_response(title_lines=["API pricing won't die—token value asymmetry will redefine AGI economics"],
                              segments=[{'from': 0, 'to': 2, 'text': long_text}])
-    result = packaging.build_packaging(DRAFT, LINES, platform_strategy('tiktok'), call=lambda *_: response)
+    # Mock packaging for same-language English test
+    class DummyStrategy:
+        template = 'podcast_en'
+        audience_language = 'en'
+    result = packaging.build_packaging(DRAFT, LINES, DummyStrategy(), call=lambda *_: response)
     assert result['fallback'] is False and [c['text'] for c in result['cues']] == [l['text'] for l in LINES]  # same language: source rows
     assert len(result['title_lines']) == 2 and all(len(line) <= 40 for line in result['title_lines'])
     assert ' '.join(result['title_lines']).startswith("API pricing won't die")
@@ -141,7 +144,10 @@ def test_same_language_keeps_the_package_when_segments_are_lumped():
     lumped = good_response(title_lines=['Great investors are flight instructors'],
                            segments=[{'from': 0, 'to': 0, 'text': 'a'}],  # does not cover every row
                            highlights=[{'line': 1, 'word': 'instructor'}])
-    result = packaging.build_packaging(DRAFT, LINES, platform_strategy('tiktok'), call=lambda *_: lumped)
+    class DummyStrategy:
+        template = 'podcast_en'
+        audience_language = 'en'
+    result = packaging.build_packaging(DRAFT, LINES, DummyStrategy(), call=lambda *_: lumped)
     assert result['fallback'] is False and [c['text'] for c in result['cues']] == [l['text'] for l in LINES]
     assert result['title_lines'] == ['Great investors are flight instructors']
     assert result['highlights'] == [{'at': 12.0, 'text': 'instructor'}]

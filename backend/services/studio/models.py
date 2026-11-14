@@ -6,7 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from backend.services.studio.templates.spec import HTML_TEMPLATE_IDS
 
 Goal = Literal['content', 'highlight', 'promo']
-Language = Literal['source', 'zh', 'en', 'ja']
+Language = Literal['source', 'zh', 'en', 'ja', 'id']
 
 class Preferences(BaseModel):
     model_config = ConfigDict(extra='forbid')

@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "commit": "053691d361364126d57b3bbde106f97559166bfb",
+  "tracked_changes": true,
+  "group": "backend",
+  "status": "failed",
+  "checks": [
+    {
+      "name": "media_test_dependencies",
+      "status": "failed",
+      "exit_code": 1,
+      "duration_sec": 0.04
+    },
+    {
+      "name": "python_correctness",
+      "status": "failed",
+      "exit_code": 1,
+      "duration_sec": 0.02
+    },
+    {
+      "name": "llm_hot_reload_tests",
+      "status": "passed",
+      "exit_code": 0,
+      "duration_sec": 1.54,
+      "skipped_tests": [],
+      "coverage": {
+        "test_count": 6,
+        "module_count": 1,
+        "missing_modules": [],
+        "missing_reload_cases": []
+      }
+    }
+  ]
+}
