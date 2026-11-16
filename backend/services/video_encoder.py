@@ -59,8 +59,8 @@ def mark_broken(name: str) -> None:
 
 
 def _bitrate(width: int, height: int, fps: int = 30) -> int:
-    # ~0.13 bits per pixel per frame matches libx264 crf 20 on talking-head footage (8 Mbps at 1080×1920@30).
-    return max(1_500_000, int(width * height * fps * 0.13))
+    # ~0.20 bits per pixel per frame (~12.4 Mbps at 1080×1920@30); hardware encoders need more than x264 for the same look.
+    return max(1_500_000, int(width * height * fps * 0.20))
 
 
 # Vertical Street and the interview packs that use it. 720p with a sub-megabit rate
@@ -80,19 +80,23 @@ def _street_interview(visual: str | None, packaging: str | None) -> bool:
 def _args(name: str, width: int, height: int, *, rate: int | None = None) -> list[str]:
     if rate is None:
         rate = _bitrate(width, height)
-        vbr = ['-b:v', str(rate), '-maxrate', str(int(rate * 1.5)), '-bufsize', str(rate * 2)]
-        software = ['-c:v', SOFTWARE, '-preset', 'veryfast', '-crf', '20', '-pix_fmt', 'yuv420p']
+        # Talking-head: ~12.4 Mbps target, peaks capped at ~15.5 Mbps.
+        vbr = ['-b:v', str(rate), '-maxrate', str(int(rate * 1.25)), '-bufsize', str(rate * 2)]
+        software = ['-c:v', SOFTWARE, '-preset', 'medium', '-crf', '18',
+                    '-maxrate', str(int(rate * 1.25)), '-bufsize', str(rate * 2),
+                    '-profile:v', 'high', '-pix_fmt', 'yuv420p']
     else:
         # Cap and target are the same so a flat Street frame cannot drift above the band,
         # and ABR (not CRF) keeps a two-minute clip from collapsing into a tiny file.
         vbr = ['-b:v', str(rate), '-maxrate', str(rate), '-bufsize', str(rate * 2)]
-        software = ['-c:v', SOFTWARE, '-preset', 'veryfast', *vbr, '-pix_fmt', 'yuv420p']
+        software = ['-c:v', SOFTWARE, '-preset', 'medium', *vbr,
+                    '-profile:v', 'high', '-pix_fmt', 'yuv420p']
     if name == 'h264_videotoolbox':
         return ['-c:v', name, *vbr, '-profile:v', 'high', '-pix_fmt', 'yuv420p']
     if name == 'h264_nvenc':
-        return ['-c:v', name, '-preset', 'p4', '-rc', 'vbr', '-cq', '21', *vbr, '-pix_fmt', 'yuv420p']
+        return ['-c:v', name, '-preset', 'p4', '-rc', 'vbr', '-cq', '19', *vbr, '-pix_fmt', 'yuv420p']
     if name == 'h264_qsv':
-        return ['-c:v', name, '-preset', 'medium', '-global_quality', '21', *vbr, '-pix_fmt', 'nv12']
+        return ['-c:v', name, '-preset', 'medium', '-global_quality', '19', *vbr, '-pix_fmt', 'nv12']
     if name == 'h264_amf':
         return ['-c:v', name, '-quality', 'balanced', '-rc', 'vbr_peak', *vbr, '-pix_fmt', 'yuv420p']
     return software
