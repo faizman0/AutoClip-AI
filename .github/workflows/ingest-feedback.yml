@@ -6,8 +6,8 @@
 name: Ingest app feedback
 
 on:
-  schedule:
-    - cron: "17 * * * *"
+  # schedule:
+  #   - cron: "17 * * * *"
   workflow_dispatch:
     inputs:
       dry_run:
