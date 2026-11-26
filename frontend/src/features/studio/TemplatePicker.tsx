@@ -11,6 +11,7 @@ export type { HtmlTemplateChoice }
 const COPY: Record<HtmlTemplateChoice, { name: string; hint: string }> = {
   editorial: { name: 'editing_style.editorial.name', hint: 'editing_style.editorial.desc' },
   street: { name: 'editing_style.street.name', hint: 'editing_style.street.desc' },
+  viral_editorial: { name: 'editing_style.viral_editorial.name', hint: 'editing_style.viral_editorial.desc' },
   news: { name: 'editing_style.news.name', hint: 'editing_style.news.desc' },
   cinema: { name: 'editing_style.cinema.name', hint: 'editing_style.cinema.desc' },
   classic: { name: 'editing_style.classic.name', hint: 'editing_style.classic.desc' },

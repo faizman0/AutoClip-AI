@@ -151,6 +151,43 @@ def overlay_cache_limit() -> int:
     return value
 
 
+def _viral_timecode(offset: float) -> str:
+    """A source timecode readout, MM:SS:FF, that walks with the clip clock.
+
+    The value changes every frame, so it is painted by ffmpeg and never enters the
+    captured overlay. ``t`` restarts at 0 for each scene; ``offset`` places the scene.
+    A quiet readout, low opacity, bottom-right, the style's reference line.
+    """
+    try:
+        from backend.services.publish_export import resolve_cjk_font, _escape_filter_path
+        font = resolve_cjk_font()
+    except Exception:
+        font = None
+    if not font:
+        return ''
+    off = f'{max(0.0, float(offset)):.3f}'
+    clock = f'(t+{off})'
+    # Each field is a drawtext eval expression; a literal ':' between them is escaped
+    # for the filtergraph. ``mod(...)\,60`` keeps the commas out of the filter list.
+    mm = f'%{{e\\:mod(floor({clock}/60)\\,60)}}'
+    ss = f'%{{e\\:mod(floor({clock})\\,60)}}'
+    ff = f'%{{e\\:mod(floor({clock}*30)\\,30)}}'
+    text = f"{mm}\\:{ss}\\:{ff}"
+    return (
+        f"[paced]drawtext=fontfile='{_escape_filter_path(font)}':fontsize=30:fontcolor=white@0.45:"
+        f"x=w-tw-40:y=h-th-40:text='{text}'[vtime]"
+    )
+
+
+def _timecode_suffix(template: str) -> str:
+    """The final label when the composite adds a per-frame suffix.
+
+    The viral timecode appends a drawtext that re-evaluates the source clock on
+    every output frame; that is the graph's terminal pad. Other templates end
+    at the progress bar.
+    """
+    return 'vtime' if template == 'viral_editorial' else 'paced'
+
 def _progress_bar(template: str, offset: float, total: float, width: int, height: int) -> str:
     """A bar whose width follows the clip clock. It is not part of the captured overlay.
 
@@ -160,7 +197,7 @@ def _progress_bar(template: str, offset: float, total: float, width: int, height
     ``t`` on that swatch starts at 0 for the scene; ``offset`` is where the scene sits in the clip.
     Street runs from x=0 across the frame. Editorial starts at x=60 and stops at x=1020.
     """
-    if template not in {'street', 'editorial'} or total <= 0 or width <= 0 or height <= 0:
+    if template not in {'street', 'editorial', 'viral_editorial'} or total <= 0 or width <= 0 or height <= 0:
         return ''
     off = f'{max(0.0, float(offset)):.3f}'
     dur = f'{max(float(total), 0.001):.3f}'
@@ -170,6 +207,13 @@ def _progress_bar(template: str, offset: float, total: float, width: int, height
         x = 0
         y = max(0, height - bar_h)
         color = '0xD7FF3A'
+    elif template == 'viral_editorial':
+        # A thin red line across the very bottom, the style's accent.
+        span = max(2, int(width))
+        bar_h = 4
+        x = 0
+        y = max(0, height - bar_h)
+        color = '0xD71920'
     else:
         span = min(960, max(2, int(width) - 120))
         # Even height: yuva420p rejects 2x1 on ffmpeg 6.1 (CI) with "Picture size 2x0".
@@ -220,6 +264,27 @@ def _editorial_scrim(width: int, height: int) -> str:
     )
 
 
+def _viral_scrim(width: int, height: int) -> str:
+    """Lower 880px black wash under the captions and headline card, matching the CSS ramp.
+
+    Stops: transparent at the top of the band, 50% at 40% of the band height, 85% at the bottom.
+    """
+    scrim_h = min(880, height)
+    if scrim_h < 2 or width < 2:
+        return ''
+    top = max(0, height - scrim_h)
+    # band-local Y: 0 at the top of the band, scrim_h at the bottom. The value is inlined
+    # because geq has no user variables; commas belong to the expression, escaped for the graph.
+    alpha = (
+        f"if(lt(Y\\,{scrim_h}*40/100)\\,255*Y/({scrim_h}*40/100)*50/100,"
+        f"255*(50/100+35/100*(Y-{scrim_h}*40/100)/({scrim_h}*60/100)))"
+    )
+    wash = f"color=c=0x000000:s={width}x{scrim_h}:r=1:d=1,format=yuva444p,geq=r='r(X\\,Y)':g='g(X\\,Y)':b='b(X\\,Y)':a='{alpha}'"
+    return (
+        f"{_still(wash)}[vscrim];"
+        f"[graded][vscrim]overlay=0:{top}:format=yuv420:shortest=1:eof_action=repeat[based];"
+    )
+
 def composite_tail(base_label: str, overlay_index: int, width: int, height: int, grade: str, *, template: str = '', offset: float = 0.0, total: float = 0.0) -> tuple[str, str]:
     """Grade the base, wash the editorial scrim, place the overlay, then the progress bar.
 
@@ -228,7 +293,12 @@ def composite_tail(base_label: str, overlay_index: int, width: int, height: int,
     that and a per-pixel ``colorbalance`` doubled the editorial composite against classic.
     The captured overlay is converted once per captured frame (only caption changes), not per output frame.
     """
-    scrim = _editorial_scrim(width, height) if template == 'editorial' else ''
+    if template == 'viral_editorial':
+        scrim = _viral_scrim(width, height)
+    elif template == 'editorial':
+        scrim = _editorial_scrim(width, height)
+    else:
+        scrim = ''
     base = '[based]' if scrim else '[graded]'
     graph = (
         f"[{base_label}]{_grade_prefix(grade)}format=yuv420p[graded];"
@@ -241,7 +311,15 @@ def composite_tail(base_label: str, overlay_index: int, width: int, height: int,
     bar = _progress_bar(template, offset, total, width, height)
     if not bar:
         return graph, 'html'
-    return graph + ';' + bar, 'paced'
+    tail = bar
+    label = _timecode_suffix(template)
+    # A quiet source timecode in the bottom-right corner, the style's reference readout.
+    # It runs after the bar, so it becomes the final output pad.
+    if template == 'viral_editorial':
+        tc = _viral_timecode(offset)
+        if tc:
+            tail += ';' + tc
+    return graph + ';' + tail, label
 
 
 def overlay_frame_count(duration: float, fps: int = 30) -> int:
@@ -517,6 +595,11 @@ async def _playwright_frames(template: str, fill: dict, frame_count: int, fps: i
                     ['italic 44px "Instrument Serif"', 'Ag'],
                     ['italic 36px "Instrument Serif"', 'Ag'],
                     ['500 22px "Inter Tight"', 'AG'],
+                    ['900 60px "Noto Sans CJK SC"', '中'],
+                    ['900 56px "Noto Sans CJK SC"', '中'],
+                    ['600 30px "Inter Tight"', 'AG'],
+                    ['700 24px "Inter Tight"', 'AG'],
+                    ['500 36px "Inter Tight"', 'AG'],
                   ];
                   await Promise.all(specs.map(([spec, text]) => document.fonts.load(spec, text)));
                   await document.fonts.ready;
@@ -567,7 +650,7 @@ def load_project_transcript(project_id: str):
         return None
 
 
-def prepare_overlay(project_id: str, template: str, packaging, duration: float, *, features: dict | None, safe_area: str = 'xiaohongshu', capture=None, clock=None, scenes=None, word_timing=None) -> OverlayJob:
+def prepare_overlay(project_id: str, template: str, packaging, duration: float, *, features: dict | None, safe_area: str = 'xiaohongshu', capture=None, clock=None, scenes=None, word_timing=None, brand_label: str | None = None) -> OverlayJob:
     """Capture the overlay, or return a classic result. This does not raise.
 
     ``capture(frame_count, fps)`` is the test seam. Without it, Playwright runs
@@ -597,6 +680,7 @@ def prepare_overlay(project_id: str, template: str, packaging, duration: float, 
         build_fill(
             packaging, duration, fps=fps, safe_area=safe_area, scenes=scenes, template=template,
             word_timing=timing, transcript=load_project_transcript(project_id),
+            brand_label=brand_label,
         ),
         packaging,
         template,

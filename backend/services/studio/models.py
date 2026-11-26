@@ -241,6 +241,8 @@ class BrandingOptions(BaseModel):
     model_config = ConfigDict(extra='forbid')
     outro_enabled: bool = True
     outro_version: str = 'v1'
+    # Optional channel/brand name burned under the Viral Editorial headline card.
+    brand_label: str = Field(default='', max_length=40)
 
 
 class PostCopy(BaseModel):
@@ -335,8 +337,8 @@ class ImportOptions(BaseModel):
     platforms: list[str] = Field(default_factory=lambda: ['douyin'], min_length=1, max_length=8)
     auto_start: bool = False
     portrait_style: Literal['auto', 'interview', 'podcast'] = 'auto'
-    html_template: Literal['editorial', 'street', 'news', 'cinema', 'classic'] | None = None
-    recommended_template: Literal['editorial', 'street', 'classic'] | None = None
+    html_template: Literal['editorial', 'street', 'news', 'cinema', 'viral_editorial', 'classic'] | None = None
+    recommended_template: Literal['editorial', 'street', 'viral_editorial', 'classic'] | None = None
     branding: BrandingOptions = Field(default_factory=BrandingOptions)
     source_window: SourceWindow | None = None
 

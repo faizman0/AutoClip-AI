@@ -2118,5 +2118,9 @@
   "余额在开始前已核对。": "O saldo foi verificado antes de começar.",
   "充值后点测试连接再重试。": "Após recarregar, teste a conexão e tente de novo.",
   "处理没有完成。请重试一次；再失败请在失败卡上点「反馈」，我们会收到失败阶段和错误类型（不含视频内容）。": "Esta etapa não terminou. Tente de novo; se falhar outra vez, toque em Comentários no cartão — recebemos o estágio e o tipo de erro (nunca o vídeo).",
-  "这个链接不是可下载的视频页，请换一个视频链接或先下载后导入。": "Este link não é uma página de vídeo baixável. Use outro link ou baixe o arquivo e importe."
+  "这个链接不是可下载的视频页，请换一个视频链接或先下载后导入。": "Este link não é uma página de vídeo baixável. Use outro link ou baixe o arquivo e importe.",
+  "editing_style.viral_editorial.name": "Viral",
+  "editing_style.viral_editorial.desc": "Cartão de introdução em negrito, legendas por palavra, barra vermelha.",
+  "品牌名称": "Nome da marca",
+  "显示在 Viral Editorial 标题卡下方。最多 40 个字符。": "Exibido abaixo do título Viral Editorial. Até 40 caracteres."
 }

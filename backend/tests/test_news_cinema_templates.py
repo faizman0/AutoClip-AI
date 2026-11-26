@@ -44,7 +44,7 @@ def test_import_accepts_news_and_cinema_and_rejects_unknown_styles():
     assert {'editorial', 'street', 'news', 'cinema'} <= variant
 
 
-def test_desktop_bundle_ships_the_four_template_folders():
+def test_desktop_bundle_ships_the_template_folders():
     script = (ROOT / 'scripts/lib/desktop_build_common.sh').read_text(encoding='utf-8')
     ignore = script[script.index('IGNORED_DIRS'):script.index('shutil.copytree')]
     assert 'templates' not in ignore and '"assets"' not in ignore
@@ -53,7 +53,8 @@ def test_desktop_bundle_ships_the_four_template_folders():
         for item in ('index.html', 'template.js', 'style.css', 'template.yaml'):
             assert (folder / item).is_file(), item
         page = (folder / 'template.js').read_text(encoding='utf-8')
-        assert 'title_lines' not in page or name in {'editorial', 'street'}
+        # Only the two title-painting templates may read the cover title slot.
+        assert 'title_lines' not in page or name in {'editorial', 'street', 'viral_editorial'}
     import tomllib
     package_data = tomllib.loads((ROOT / 'pyproject.toml').read_text(encoding='utf-8'))['tool']['setuptools']['package-data']['backend']
     assert 'assets/templates/*/*' in package_data

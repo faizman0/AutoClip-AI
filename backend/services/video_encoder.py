@@ -67,7 +67,7 @@ def _bitrate(width: int, height: int, fps: int = 30) -> int:
 # looked soft on a two-minute clip; production packs held up at 1080×1920 around 2 Mbps.
 STREET_INTERVIEW_SIZE = (1080, 1920)
 STREET_INTERVIEW_BITRATE = 2_000_000
-_HTML_NOT_STREET = frozenset({'editorial', 'news', 'cinema'})
+_HTML_NOT_STREET = frozenset({'editorial', 'news', 'cinema', 'viral_editorial'})
 
 
 def _street_interview(visual: str | None, packaging: str | None) -> bool:

@@ -107,8 +107,8 @@ export interface GenerationState {
   quota_precheck?: 'skipped' | 'ok' | 'exhausted' | 'unavailable'
   /** Consecutive failed attempts after the last success, and whether the last two share an error_code. */
   repeat_failure?: { count: number; same_code: boolean }
-  html_template?: 'editorial' | 'street' | 'news' | 'cinema' | 'classic'
-  recommended_template?: 'editorial' | 'street' | 'classic'
+  html_template?: 'editorial' | 'street' | 'viral_editorial' | 'news' | 'cinema' | 'classic'
+  recommended_template?: 'editorial' | 'street' | 'viral_editorial' | 'classic'
   accepted_recommendation?: boolean
 }
 export interface PlatformStrategySummary {
@@ -169,7 +169,8 @@ export interface ImportOptions {
   goal: 'auto' | Goal; language: Language; aspect: Draft['aspect'] | null
   duration: number | null; instruction: string
   portrait_style?: 'auto' | 'interview' | 'podcast'
-  html_template?: 'editorial' | 'street' | 'news' | 'cinema' | 'classic'
+  html_template?: 'editorial' | 'street' | 'viral_editorial' | 'news' | 'cinema' | 'classic'
+  brand_label?: string
   source_window?: SourceWindow | null
 }
 
@@ -187,5 +188,5 @@ export interface ImportPlan {
   preferences: {goal: Goal; language: Language; aspect: Draft['aspect']; duration: number}
   overrides: ImportOptions
 }
-export const defaultImportOptions: ImportOptions = {goal:'auto', language:'source', aspect:null, duration:null, instruction:'', portrait_style:'auto'}
+export const defaultImportOptions: ImportOptions = {goal:'auto', language:'source', aspect:null, duration:null, instruction:'', portrait_style:'auto', brand_label:''}
 export const goalLabels = {auto:'AI 自动匹配', content:'内容切片', highlight:'精彩高光', promo:'推广成片'} as const

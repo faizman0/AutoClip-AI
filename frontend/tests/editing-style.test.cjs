@@ -67,6 +67,7 @@ test('bundled style previews stay inside the size budget', () => {
     'editorial.poster.webp', 'editorial.preview.mp4', 'editorial.preview.webm',
     'news.poster.webp', 'news.preview.mp4', 'news.preview.webm',
     'street.poster.webp', 'street.preview.mp4', 'street.preview.webm',
+    'viral_editorial.poster.webp', 'viral_editorial.preview.mp4', 'viral_editorial.preview.webm',
   ])
   let total = 0
   for (const name of names) {

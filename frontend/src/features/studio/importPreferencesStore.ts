@@ -37,6 +37,7 @@ export function sanitizeImportPreferences(raw: unknown): ImportOptions {
     duration,
     instruction: typeof value.instruction === 'string' ? value.instruction.slice(0, 1000) : '',
     portrait_style: typeof value.portrait_style === 'string' && STYLES.includes(value.portrait_style) ? value.portrait_style as ImportOptions['portrait_style'] : 'auto',
+    brand_label: typeof value.brand_label === 'string' ? value.brand_label.trim().slice(0, 40) : '',
   }
 }
 

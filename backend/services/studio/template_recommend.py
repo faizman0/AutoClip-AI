@@ -11,7 +11,7 @@ import subprocess
 import tempfile
 import time
 
-TEMPLATES = ('editorial', 'street', 'classic')
+TEMPLATES = ('editorial', 'street', 'viral_editorial', 'classic')
 REASONS = ('seated_interview', 'street_quick', 'speech', 'default', 'timeout')
 SCENES = ('seated_interview', 'street', 'speech', 'unknown')
 PEOPLE = ('solo', 'duo', 'group', 'unknown')
@@ -64,16 +64,16 @@ def decide(signals: dict) -> tuple[str, str]:
     if scene == 'street' or pace == 'fast':
         return 'street', 'street_quick'
     if scene == 'seated_interview':
-        return 'editorial', 'seated_interview'
+        return 'viral_editorial', 'seated_interview'
     if scene == 'speech':
-        return 'editorial', 'speech'
-    return 'editorial', 'default'
+        return 'viral_editorial', 'speech'
+    return 'viral_editorial', 'default'
 
 
 def pack(template: str, reason: str, signals: dict | None) -> dict:
     raw = signals or {}
     return {
-        'template': template if template in TEMPLATES else 'editorial',
+        'template': template if template in TEMPLATES else 'viral_editorial',
         'reason_code': reason if reason in REASONS else 'default',
         'signals': {
             key: raw.get(key) if raw.get(key) in allowed else 'unknown'
@@ -83,7 +83,7 @@ def pack(template: str, reason: str, signals: dict | None) -> dict:
 
 
 def fallback(reason: str = 'default') -> dict:
-    return pack('editorial', reason, signals_from_media(None, None, None))
+    return pack('viral_editorial', reason, signals_from_media(None, None, None))
 
 
 def probe_header(header: bytes, budget: float) -> dict:

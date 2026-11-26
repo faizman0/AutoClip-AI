@@ -17,6 +17,7 @@ type Trigger = 'hover' | 'focus' | 'keyboard' | 'button' | 'select'
 const COPY: Record<EditingStyle, { name: string; desc: string }> = {
   editorial: { name: 'editing_style.editorial.name', desc: 'editing_style.editorial.desc' },
   street: { name: 'editing_style.street.name', desc: 'editing_style.street.desc' },
+  viral_editorial: { name: 'editing_style.viral_editorial.name', desc: 'editing_style.viral_editorial.desc' },
   news: { name: 'editing_style.news.name', desc: 'editing_style.news.desc' },
   cinema: { name: 'editing_style.cinema.name', desc: 'editing_style.cinema.desc' },
   classic: { name: 'editing_style.classic.name', desc: 'editing_style.classic.desc' },
@@ -397,7 +398,7 @@ export default function EditingStylePicker({
                 if (bar) bar.style.transform = `scaleX(${Math.min(1, event.currentTarget.currentTime / PREVIEW_SECONDS)})`
               }}
             />
-            {loading && id === 'editorial' ? <span className="studio-style-badge studio-style-badge--wait" aria-hidden="true" /> : null}
+            {loading && id === 'viral_editorial' ? <span className="studio-style-badge studio-style-badge--wait" aria-hidden="true" /> : null}
             {recommendedCard ? <span className="studio-style-badge">{t('editing_style.badge')}</span> : null}
             <span className={`studio-style-radio${on ? ' is-on' : ''}`} aria-hidden="true">{on ? '✓' : ''}</span>
             <span className="studio-style-mark" aria-hidden="true">{t('editing_style.preview_mark')}</span>

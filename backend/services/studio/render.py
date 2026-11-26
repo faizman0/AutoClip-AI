@@ -259,6 +259,7 @@ def _encode_draft(
                 project_id, html_template, draft.packaging,
                 sum(audio.scene_duration(scene) for scene in draft.scenes),
                 features=features, safe_area=safe_area, scenes=draft.scenes,
+                brand_label=getattr(draft, 'branding', None) and draft.branding.brand_label,
             )
         except (project_cancellation.ProjectDeleted, project_cancellation.JobStopped):
             raise

@@ -26,7 +26,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 STILLS = ROOT / 'scripts' / 'fixtures' / 'editing-style'
 OUT = ROOT / 'frontend' / 'src' / 'assets' / 'editing-style'
-STYLES = ('editorial', 'street', 'classic')
+STYLES = ('editorial', 'street', 'viral_editorial', 'classic')
 POSTER_MAX = 30 * 1024
 VIDEO_MAX = 120 * 1024
 FILE_MAX = 300 * 1024
@@ -34,7 +34,7 @@ TOTAL_MAX = 500 * 1024
 WIDTH, HEIGHT, FPS, DURATION = 216, 384, 24, 2.5
 POSTER_W, POSTER_H = 270, 480
 # Representative windows inside the supplied renders, after the title has settled.
-CLIP_START = {'editorial': 1.8, 'street': 6.0, 'classic': 8.0}
+CLIP_START = {'editorial': 1.8, 'street': 6.0, 'viral_editorial': 1.0, 'classic': 8.0}
 
 
 def ffmpeg() -> str:

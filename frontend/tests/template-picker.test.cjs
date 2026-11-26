@@ -44,20 +44,20 @@ function nodes(value) {
   return !value || typeof value !== 'object' ? [] : Array.isArray(value) ? value.flatMap(nodes) : [value, ...nodes(value.props?.children)]
 }
 
-test('the import default is editorial and a change is an override event', () => {
+test('the import default is viral_editorial and a change is an override event', () => {
   const { exports, events } = load()
   const fields = value => JSON.parse(JSON.stringify(value))
-  assert.equal(exports.chosenTemplate(undefined), 'editorial')
+  assert.equal(exports.chosenTemplate(undefined), 'viral_editorial')
   assert.deepEqual(fields(exports.templateImportFields(false, 'street')), {})
-  assert.deepEqual(fields(exports.templateImportFields(true, undefined)), { html_template: 'editorial' })
+  assert.deepEqual(fields(exports.templateImportFields(true, undefined)), { html_template: 'viral_editorial' })
   assert.deepEqual(fields(exports.templateImportFields(true, 'classic')), { html_template: 'classic' })
   const chosen = []
   const tree = exports.default({ value: undefined, onChange: next => chosen.push(next) })
   const buttons = nodes(tree).filter(node => node.type === 'button')
-  assert.equal(buttons[0].props['aria-pressed'], true)
+    assert.equal(buttons[2].props['aria-pressed'], true)
   buttons[1].props.onClick()
   assert.deepEqual(chosen, ['street'])
-  assert.equal(events[0].from_template, 'editorial')
+  assert.equal(events[0].from_template, 'viral_editorial')
   assert.equal(events[0].to_template, 'street')
   assert.equal(events[0].stage, 'pre_import')
   assert.equal(events[0].flow_id, 't-abc123def456')

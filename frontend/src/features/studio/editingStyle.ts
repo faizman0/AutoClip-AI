@@ -1,7 +1,7 @@
-export const HTML_TEMPLATE_CHOICES = ['editorial', 'street', 'news', 'cinema', 'classic'] as const
+export const HTML_TEMPLATE_CHOICES = ['editorial', 'street', 'viral_editorial', 'news', 'cinema', 'classic'] as const
 export type HtmlTemplateChoice = (typeof HTML_TEMPLATE_CHOICES)[number]
 export type EditingStyle = HtmlTemplateChoice
-export const DEFAULT_HTML_TEMPLATE: HtmlTemplateChoice = 'editorial'
+export const DEFAULT_HTML_TEMPLATE: HtmlTemplateChoice = 'viral_editorial'
 
 export const REASON_CODES = ['seated_interview', 'street_quick', 'speech', 'default', 'timeout'] as const
 export type ReasonCode = (typeof REASON_CODES)[number]
@@ -32,8 +32,8 @@ export function chosenTemplate(value: string | undefined): HtmlTemplateChoice {
 export function templateImportFields(enabled: boolean, value: string | undefined, recommended?: string | null): { html_template?: HtmlTemplateChoice; recommended_template?: HtmlTemplateChoice } {
   if (!enabled) return {}
   const html_template = chosenTemplate(value)
-  const recommended_template = recommended === 'editorial' || recommended === 'street' || recommended === 'classic' ? recommended : undefined
-  // Recommendation stays on the three scored styles. news and cinema are explicit choices.
+  const recommended_template = recommended === 'editorial' || recommended === 'street' || recommended === 'viral_editorial' || recommended === 'classic' ? recommended : undefined
+  // Recommendation stays on the four scored styles. news and cinema are explicit choices.
   return recommended_template ? { html_template, recommended_template } : { html_template }
 }
 
@@ -60,11 +60,11 @@ export function normalizeRecommendation(raw: unknown): StyleRecommendation | nul
 }
 
 export function recommendationTimedOut(): StyleRecommendation {
-  return { template: 'editorial', reason_code: 'timeout', signals: { ...EMPTY_SIGNALS } }
+  return { template: 'viral_editorial', reason_code: 'timeout', signals: { ...EMPTY_SIGNALS } }
 }
 
 export function recommendationFailed(): StyleRecommendation {
-  return { template: 'editorial', reason_code: 'default', signals: { ...EMPTY_SIGNALS } }
+  return { template: 'viral_editorial', reason_code: 'default', signals: { ...EMPTY_SIGNALS } }
 }
 
 /** A manual choice wins. Otherwise the recommendation replaces the preselected style. */

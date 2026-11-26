@@ -1,0 +1,33 @@
+id: viral_editorial
+version: 1
+name: {zh: 爆款剪辑, en: Viral Editorial}
+fit:
+  formats: {sit_down_interview: 0.95, keynote_stage: 0.6, podcast_studio: 0.8, street_interview: 0.3}
+  needs_face: true
+canvas: {aspects: [portrait], overlay_px: [1080, 1920], fps: 30}
+base:
+  # Minimalist interview look: natural framing, a slow push only on the intro, no aggressive zoom.
+  framing: full_face
+  face_y: 0.40
+  head_zone: [200, 900]
+  zoom:
+    mode: creep
+    creep: 0.02
+    intro: {from: 1.05, dur: 1.0}
+  transitions: {broll: none, max: 0}
+  # Natural documentary grade: neutral, soft contrast, no cinematic LUT.
+  grade: "eq=contrast=1.02:saturation=0.97:brightness=0.0"
+overlay:
+  entry: index.html
+  slots:
+    # The headline card owns the lower band; the dynamic subtitles sit just above it.
+    hook: {top: 1470, alt_top: 1470}
+    subtitle: {top: 1360, max_rows: 2}
+  safe_area: douyin
+  limits: {emphasis_gap_s: 3.0}
+fields:
+  required: [title_lines, cues]
+  optional: [kicker, emphasis, speakers]
+audio: {bgm: none}
+cover: {layout: viral_editorial_3x4, from_overlay: true}
+qa: {}

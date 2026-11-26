@@ -29,6 +29,10 @@ _NEWS_FONT = 42
 _NEWS_INSET = 72
 _CINEMA_FONT = 40
 _CINEMA_INSET = 80
+_VIRAL_FONT = 56
+_VIRAL_INSET = 60
+# A Viral Editorial group stays 1-5 spoken words so the blue highlight reads per word.
+_VIRAL_GROUP_WORDS = 5
 _MIN_PHRASE_SEC = 0.6
 _LEAD = set('的了着过地得吗呢吧啊呀')
 _SOURCE_LIMIT = 34
@@ -54,6 +58,8 @@ def caption_line_limit(template: str, safe_area: str = 'xiaohongshu') -> int | N
         return (_CANVAS - 2 * _NEWS_INSET) // _NEWS_FONT
     if template == 'cinema':
         return (_CANVAS - 2 * _CINEMA_INSET) // _CINEMA_FONT
+    if template == 'viral_editorial':
+        return (_CANVAS - 2 * _VIRAL_INSET) // _VIRAL_FONT
     return None
 
 
@@ -1422,7 +1428,7 @@ def _en_for_groups(english: list[dict], groups: list[list], timed: bool) -> list
     return out
 
 
-def build_fill(packaging, duration: float, fps: int = 30, safe_area: str = 'xiaohongshu', scenes=None, template: str | None = None, word_timing=None, transcript=None) -> dict:
+def build_fill(packaging, duration: float, fps: int = 30, safe_area: str = 'xiaohongshu', scenes=None, template: str | None = None, word_timing=None, transcript=None, brand_label: str | None = None) -> dict:
     """A JSON-safe fill. Word times are frame indexes on the clip, not source timestamps."""
     duration = max(0.0, float(duration))
     total = max(1, _frames(duration, fps))
@@ -1446,6 +1452,10 @@ def build_fill(packaging, duration: float, fps: int = 30, safe_area: str = 'xiao
         phrase_limit = min(phrase_limit, _EDITORIAL_SCREEN)
         group_limit = phrase_limit
     if (template or '') in {'news', 'cinema'}:
+        group_limit = phrase_limit
+    if (template or '') == 'viral_editorial':
+        # One blue highlight per spoken word; never more than a handful on screen.
+        phrase_limit = min(phrase_limit, _VIRAL_GROUP_WORDS)
         group_limit = phrase_limit
     # A flash under 0.6s may join its neighbour a little past the screen size.
     hold_limit = phrase_limit + 2 if (template or '') == 'editorial' else phrase_limit
@@ -1566,6 +1576,10 @@ def build_fill(packaging, duration: float, fps: int = 30, safe_area: str = 'xiao
     except (TypeError, ValueError):
         accent = len(lines) - 1 if lines else 0
     hook_lines = [[line, index == accent] for index, line in enumerate(lines[:2])]
+    # Viral Editorial keeps up to 3 headline lines on the opening card; the accent
+    # line turns red. The cover still reads only the first two.
+    viral_lines = [str(line).strip() for line in lines if str(line).strip()][:3]
+    accent_index = min(int(accent), len(viral_lines) - 1) if viral_lines else 0
     issue = _issue_line(packaging, people)
     src_start = 0.0
     if scenes:
@@ -1578,6 +1592,8 @@ def build_fill(packaging, duration: float, fps: int = 30, safe_area: str = 'xiao
         'hook_lines': hook_lines,
         'hook_trk': credit,
         'title_lines': lines[:2],
+        'viral_title_lines': viral_lines,
+        'viral_accent': accent_index,
         'topic': _short_topic(lines, people),
         'words': words,
         'moments': moments,
@@ -1591,6 +1607,7 @@ def build_fill(packaging, duration: float, fps: int = 30, safe_area: str = 'xiao
         'stickers': [],
         'safe_area': area,
         'audience_language': str(_get(packaging, 'audience_language', '') or ''),
+        'brand_label': str(brand_label or '').strip()[:40],
     }
 
 
@@ -1598,7 +1615,7 @@ def _without_video_title(fill: dict) -> dict:
     """Drop the cover hook from the pixels. The unpainted fill keeps it for the cover."""
     hook = dict(fill.get('hook') or {})
     hook['text'] = ''
-    return {**fill, 'hook': hook, 'hook_lines': [], 'title_lines': [], 'topic': ''}
+    return {**fill, 'hook': hook, 'hook_lines': [], 'title_lines': [], 'viral_title_lines': fill.get('viral_title_lines', []), 'topic': ''}
 
 
 def paint_fill(fill: dict, packaging, template: str | None = None) -> dict:

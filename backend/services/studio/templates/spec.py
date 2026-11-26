@@ -11,7 +11,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-HTML_TEMPLATE_IDS = ('editorial', 'street', 'news', 'cinema')
+HTML_TEMPLATE_IDS = ('editorial', 'street', 'news', 'cinema', 'viral_editorial')
 STYLE_IDS = (*HTML_TEMPLATE_IDS, 'classic')
 SAFE_AREAS = ('xiaohongshu', 'douyin', 'tiktok', 'instagram_reels', 'youtube_shorts')
 PACKAGING_FIELDS = ('title_lines', 'cues', 'kicker', 'emphasis', 'numbers', 'gloss', 'speakers', 'stickers')
@@ -170,7 +170,7 @@ class CoverSpec(BaseModel):
 
 class TemplateSpec(BaseModel):
     model_config = ConfigDict(extra='forbid')
-    id: Literal['editorial', 'street', 'news', 'cinema']
+    id: Literal['editorial', 'street', 'news', 'cinema', 'viral_editorial']
     version: Literal[1]
     name: NameSpec
     fit: FitSpec

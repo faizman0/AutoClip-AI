@@ -13,11 +13,11 @@ def test_picture_shape_and_length_choose_a_style():
     assert street['duration_bucket'] == 'short'
     assert decide(street) == ('street', 'street_quick')
     seated = signals_from_media(1920, 1080, 700)
-    assert decide(seated) == ('editorial', 'seated_interview')
+    assert decide(seated) == ('viral_editorial', 'seated_interview')
     talk = signals_from_media(1920, 1080, 240)
-    assert decide(talk) == ('editorial', 'speech')
+    assert decide(talk) == ('viral_editorial', 'speech')
     missing = signals_from_media(None, None, None)
-    assert decide(missing) == ('editorial', 'default')
+    assert decide(missing) == ('viral_editorial', 'default')
     assert decide({'scene': 'speech', 'pace': 'fast'}) == ('street', 'street_quick')
 
 
@@ -26,13 +26,13 @@ def test_a_slow_probe_falls_back_without_leaving_the_budget():
         raise TimeoutError('probe timed out')
 
     result = recommend_template(url='https://www.youtube.com/watch?v=abc', header=b'not-a-movie', probe=slow)
-    assert result['template'] == 'editorial'
+    assert result['template'] == 'viral_editorial'
     assert result['reason_code'] == 'timeout'
     assert result['signals']['people'] == 'unknown'
     assert 'youtube' not in str(result)
     empty = recommend_template(url='https://www.youtube.com/watch?v=abc')
     assert empty['reason_code'] == 'default'
-    assert empty['template'] == 'editorial'
+    assert empty['template'] == 'viral_editorial'
 
 
 def test_recommend_route_rejects_an_empty_body_and_does_not_echo_the_url():
@@ -48,7 +48,7 @@ def test_recommend_route_rejects_an_empty_body_and_does_not_echo_the_url():
     ok = client.post('/studio/template-recommend', data={'url': 'https://youtu.be/abcdefghijk'})
     assert ok.status_code == 200
     body = ok.json()
-    assert body['template'] == 'editorial'
+    assert body['template'] == 'viral_editorial'
     assert body['reason_code'] == 'default'
     assert 'youtu' not in str(body)
 

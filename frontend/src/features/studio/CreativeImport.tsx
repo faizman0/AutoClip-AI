@@ -459,6 +459,7 @@ export default function CreativeImport({ onImported, blocked = false, onBlocked,
       const templateFields = templateImportFields(templatesOn, options.html_template, recommendation)
       if (templateFields.html_template) body.append('html_template', templateFields.html_template)
       if (templateFields.recommended_template) body.append('recommended_template', templateFields.recommended_template)
+      if (templateFields.html_template === 'viral_editorial' && options.brand_label?.trim()) body.append('brand_label', options.brand_label.trim().slice(0, 40))
       body.append('features', JSON.stringify(featureSnapshot()))
       if (options.aspect) body.append('aspect', options.aspect)
       if (options.duration) body.append('duration', String(options.duration))
@@ -581,7 +582,7 @@ export default function CreativeImport({ onImported, blocked = false, onBlocked,
       {error&&<p className="studio-error" role="alert">{error}</p>}
     </div>
     <Dialog open={preferences} onClose={()=>setPreferences(false)} title={t("制作偏好")} description={t("默认由 AI 匹配。你指定的选项优先，生成后也可以修改。")} footer={<div className="studio-actions"><Btn onClick={()=>{setOptions({...defaultImportOptions,instruction:options.instruction});setSubtitle(null);setBrowser('')}}>{t("恢复自动")}</Btn><Btn variant="cta" onClick={()=>setPreferences(false)}>{t("完成")}</Btn></div>}>
-      <ImportPreferences value={options} onChange={setOptions}/>
+      <ImportPreferences value={options} onChange={setOptions} showBrandLabel={options.html_template === 'viral_editorial'}/>
       <label className="studio-field">{t("已有字幕（选填）")}<input type="file" accept=".srt" aria-label={t("已有字幕")} onChange={e=>setSubtitle(e.target.files?.[0] || null)}/>{subtitle&&<small>{subtitle.name}<button className="studio-link" onClick={()=>setSubtitle(null)}>{t("移除")}</button></small>}</label>
       {source==='link'&&<details className="studio-details"><summary>{t("下载遇到登录限制时")}</summary><BrowserCookieControl browser={browser} busy={busy} onChange={setBrowser} assist={false} /></details>}
     </Dialog>
